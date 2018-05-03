@@ -35,7 +35,7 @@ class Nreparametrize(nn.Module):
 
     def log_prior(self):
         return Normal(torch.zeros_like(self.mu), torch.ones_like(self.sigma)).log_prob(self.z)
-
+   
     @staticmethod
     def nsample(mu, sigma, n=1):
         eps = Normal(torch.zeros_like(mu), torch.ones_like(mu)).sample_n(n)

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from SNets import S2ConvNet, S2DeconvNet
 from pytorch_util import MLP
 from reparameterize import Nreparametrize
-
+from pytorch_util import logsumexp
 
 class VAE(nn.Module):
     def __init__(self):
@@ -78,7 +78,20 @@ class NS2VAE(VAE):
 
     def recon_loss(self, x, x_recon):
         x = x.expand_as(x_recon)
-        # x_recon = F.sigmoid(x_recon)
-        # b = x_recon.log() * x + (1 - x_recon).log() * (1 - x)
-        b = F.binary_cross_entropy_with_logits(x_recon, x) * (x_recon.size()[-1] ** 2)
-        return b
+        x_recon = F.sigmoid(x_recon)
+        b = x_recon.log() * x + (1 - x_recon).log() * (1 - x)
+#         b = F.binary_cross_entropy_with_logits(x_recon, x) * (x_recon.size()[-1] ** 2)
+        return b.sum(-1).sum(-1).sum(-1)
+    
+    
+    def log_likelihood(self, x, n=1):
+
+        x_recon = self.forward(x, n)
+        
+        log_p_z = torch.cat([r.log_prior().sum(-1) for r in self.reparametrize], -1).sum(-1)
+        
+        log_q_z_x = torch.cat([r.log_posterior().sum(-1) for r in self.reparametrize], -1).sum(-1)
+    
+        log_p_x_z = - self.recon_loss(x, x_recon)
+
+        return (logsumexp(log_p_x_z + log_p_z - log_q_z_x, dim=0) - np.log(n)).mean()
