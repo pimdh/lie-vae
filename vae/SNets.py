@@ -65,10 +65,10 @@ class S2ConvNet(nn.Module):
     
 class S2DeconvNet(nn.Module):
 
-    def __init__(self, f_list=[10,10,1], b_list=[5,10,30], mlp_dim=[10], activation=nn.ReLU):
+    def __init__(self, f_list=[10,10,1], b_list=[5,10,30], mlp_dim=[10], max_pooling=True, activation=nn.ReLU):
 
         super(S2DeconvNet, self).__init__()
-        #TODO make boolean for integrate
+
         grid_s2 = s2_near_identity_grid()
         grid_so3 = so3_near_identity_grid()
         
@@ -78,6 +78,7 @@ class S2DeconvNet(nn.Module):
         self.mlp_dim.append( f_list[0]*(b_list[0]*2)**3)
 
         self.activation = activation
+        self.max_pooling = max_pooling
         
         self.mlp_module = MLP(H=self.mlp_dim, activation=self.activation)
 
@@ -107,10 +108,15 @@ class S2DeconvNet(nn.Module):
         x = x.view(-1, self.f_list[0], self.b_list[0]*2, self.b_list[0]*2, self.b_list[0]*2)
         
         x = self.conv_module(x)
-        
+  
         x = x.view(*shape, self.f_list[-1], self.b_list[-1]*2, self.b_list[-1]*2, self.b_list[-1]*2)
 
         #x = so3_integrate(x)
 
         # TODO better reduce gamma channel
-        return x.max(dim = -1)[0] 
+        if self.max_pooling:
+            x = x.max(dim = -1)[0]
+        else:
+            x = x.mean(dim = -1)[0]
+            
+        return x 
