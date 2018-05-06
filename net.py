@@ -11,9 +11,9 @@ from torch.optim import Adam
 
 
 class Net(nn.Module):
-    def __init__(self, n_hidden):
+    def __init__(self, n_hidden, n_points):
         super(Net, self).__init__()
-        self.hidden_1 = nn.Linear(2 * 5 * 3, n_hidden)
+        self.hidden_1 = nn.Linear(2 * n_points * 3, n_hidden)
         self.hidden_2 = nn.Linear(n_hidden, n_hidden)
         self.hidden_3 = nn.Linear(n_hidden, n_hidden)
         self.hidden_4 = nn.Linear(n_hidden, n_hidden)
@@ -28,7 +28,6 @@ class Net(nn.Module):
         h01 = F.tanh(self.hidden_2(h0))
         h02 = F.relu(self.hidden_3(h01))
         h1 = F.tanh(self.hidden_4(h02))
-
 
         if random:
             M = self.hidden_random_matrix(h1)

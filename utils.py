@@ -57,16 +57,37 @@ def randomR():
     ret = q @ np.diag(r / np.abs(r))
     return ret * np.linalg.det(ret)
 
-def next_batch(batch_dim):
-    a = np.pi / 12
-    canonicalL = deg2coo(np.array([[0, 0],
-                                   [a / 2, np.pi/2],
-                                   [a, np.pi/2],
-                                   [a / 2, 0],
-                                   [a / 2, 0]
-                                  ]))
+def canonicalShape(letter='L', size=6):
+    a = np.pi / size
+    canon = None
+    if letter =='L':
+        canon = deg2coo(np.array([[0, 0],
+                               [a / 4, np.pi/2],
+                               [a / 2, np.pi/2],
+                               [3*a / 4, np.pi/2],
+                               [a, np.pi/2],
+                               [a / 2, 0],
+                               [a / 4, 0]
+                              ]))
+    elif letter == '0':
+        canon = deg2coo(np.array([[0, 0],
+                                 [a / 2, 0],
+                                 [a / 2, 1*np.pi/6],
+                                 [a / 2, 2*np.pi/6],
+                                 [a / 2, 3*np.pi/6],
+                                 [a / 2, 4*np.pi/6],
+                                 [a / 2, 5*np.pi/6]
+                              ]))
+    else:
+        canon = None
 
-    originalL = np.stack([canonicalL @ randomR() for _ in range(batch_dim)])
+    return canon
+
+def next_batch(batch_dim, letter='L', size=6):
+
+    canonical_s = canonicalShape(letter, size)
+
+    originalL = np.stack([canonical_s @ randomR() for _ in range(batch_dim)])
     rotations = np.stack([randomR() for _ in range(batch_dim)])
     rotatedL = np.stack([oL @ rot for oL, rot in zip(originalL, rotations)])
 

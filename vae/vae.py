@@ -46,7 +46,7 @@ class VAE(nn.Module):
 
         return self.decode(z_cat)
 
-    def recon_loss(self, x, x_recon):
+    def recon_loss(self, x_recon, x):
         raise NotImplemented
 
     def elbo(self, x, n=1):
@@ -58,7 +58,13 @@ class VAE(nn.Module):
         return recon_loss, kl_summed
 
     def log_likelihood(self, x, n=1):
-        raise NotImplemented
+        x_recon = self.forward(x, n)
+  
+        log_p_z = torch.cat([r.log_prior() for r in self.reparameterize], -1).sum(-1)
+        log_q_z_x = torch.cat([r.log_posterior() for r in self.reparameterize], -1).sum(-1)
+        log_p_x_z = - self.recon_loss(x_recon, x)
+        
+        return (logsumexp(log_p_x_z + log_p_z - log_q_z_x, dim=0) - np.log(n)).mean()
 
 
 class equivariant_callback(nn.Module):
@@ -177,12 +183,3 @@ class NS2VAE(VAE):
                                                (-x_recon - max_val).exp()).log()
         
         return loss.sum(-1).sum(-1).sum(-1)
-    
-    def log_likelihood(self, x, n=1):
-        x_recon = self.forward(x, n)
-  
-        log_p_z = torch.cat([r.log_prior() for r in self.reparameterize], -1).sum(-1)
-        log_q_z_x = torch.cat([r.log_posterior() for r in self.reparameterize], -1).sum(-1)
-        log_p_x_z = - self.recon_loss(x_recon, x)
-        
-        return (logsumexp(log_p_x_z + log_p_z - log_q_z_x, dim=0) - np.log(n)).mean()
