@@ -151,7 +151,9 @@ class NS2VAE(VAE):
                 reparam = Nreparameterize(cb['mlp_h'][-1], z)
             elif l == 'so3':
                 assert z == 9 #the 3x3 lie group element will be concatenated 
-                reparam = SO3reparameterize(cb['mlp_h'][-1], z)
+                reparam = Nreparameterize(cb['mlp_h'][-1], 3)
+                reparam = SO3reparameterize(reparam)
+                
             else:
                 print ('!!! please specify latent')
                 raise RuntimeError 

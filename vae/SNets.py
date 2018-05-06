@@ -88,12 +88,12 @@ class S2DeconvNet(nn.Module):
         
             modules.append(self.activation())
             
-            if b_in < b_out:
-                modules.append(torch.nn.Upsample(size=b_out * 2,  mode='nearest'))
+            #if b_in < b_out:
+            #    modules.append(torch.nn.Upsample(size=b_out * 2,  mode='nearest'))
                 
             conv = SO3Convolution(nfeature_in=f_in,
                                   nfeature_out=f_out,
-                                  b_in=b_out,
+                                  b_in=b_in, #b_out,
                                   b_out=b_out,
                                   grid=grid_so3)
             
