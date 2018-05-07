@@ -172,8 +172,6 @@ class NS2VAE(VAE):
         self.decoder_mlp_h.insert(0, z_dim_out)
         self.decoder = S2DeconvNet(f_list=decoder_f, b_list=decoder_b, 
                                    mlp_dim=self.decoder_mlp_h, max_pooling=max_pooling)
-
-        self.bce = nn.BCELoss(size_average=False)
         
         
     def recon_loss(self, x_recon, x):
