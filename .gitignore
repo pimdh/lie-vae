@@ -2,4 +2,6 @@
 data/*
 s2cnn/*
 __pycache__/*
-.ipynb_checkpoints/* 
+vae/__pycache__/*
+.ipynb_checkpoints/*
+mnist_example/* 

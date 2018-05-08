@@ -8,13 +8,12 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.distributions import Normal
 
-from pytorch_util import logsumexp, n2p
+from pytorch_util import logsumexp, n2p, t2p
 
-
-class Nreparametrize(nn.Module):
+class Nreparameterize(nn.Module):
 
     def __init__(self, input_dim, z_dim):
-        super(Nreparametrize, self).__init__()
+        super(Nreparameterize, self).__init__()
 
         self.input_dim = input_dim
         self.z_dim = z_dim
@@ -22,39 +21,78 @@ class Nreparametrize(nn.Module):
         self.mu_linear = nn.Linear(input_dim, z_dim)
 
     def forward(self, x, n=1):
+        #print(x.max().data.cpu().numpy(),x.min().data.cpu().numpy())
         self.mu = self.mu_linear(x)
         self.sigma = F.softplus(self.sigma_linear(x))
-        self.z = self.nsample(self.mu, self.sigma, n=n)
+        self.z = self.nsample(n=n)
         return self.z
 
     def kl(self):
         return -0.5 * torch.sum(1 + 2 * self.sigma.log() - self.mu.pow(2) - self.sigma ** 2, -1)
-
+    
+    #def kl(self):
+    #    log_q_z_x = self.log_posterior()
+    #    log_p_z = self.log_prior()
+    #   kl = log_q_z_x - log_p_z
+    #    return kl
+    
     def log_posterior(self):
-        return Normal(self.mu, self.sigma).log_prob(self.z)
+        return self._log_posterior(self.z)
+
+    def _log_posterior(self, z):
+        return Normal(self.mu, self.sigma).log_prob(z)
 
     def log_prior(self):
         return Normal(torch.zeros_like(self.mu), torch.ones_like(self.sigma)).log_prob(self.z)
    
-    @staticmethod
-    def nsample(mu, sigma, n=1):
-        eps = Normal(torch.zeros_like(mu), torch.ones_like(mu)).sample_n(n)
-        return mu + eps * sigma
+    def nsample(self, n=1):
+        eps = Normal(torch.zeros_like(self.mu), torch.ones_like(self.mu)).sample_n(n)
+        return self.mu + eps * self.sigma
 
+class N0reparameterize(nn.Module):
 
-class SO3Reparameterize(nn.Module):
-
-    def __init__(self, input_dim, k=10):
-        super(SO3Reparameterize, self).__init__()
+    def __init__(self, input_dim, z_dim):
+        super(N0reparameterize, self).__init__()
 
         self.input_dim = input_dim
-        self.z_dim = 3
+        self.z_dim = z_dim
+        self.sigma_linear = nn.Linear(input_dim, z_dim)
+       
+
+    def forward(self, x, n=1):
+        
+        self.sigma = F.softplus(self.sigma_linear(x)) 
+        self.z = self.nsample(n=n)
+        return self.z
+
+    def kl(self):
+        return -0.5 * torch.sum(1 + 2 * self.sigma.log() - self.sigma ** 2, -1)
+    
+    def log_posterior(self):
+        return self._log_posterior(self.z)
+
+    def _log_posterior(self, z):
+        return Normal(torch.zeros_like(self.sigma), self.sigma).log_prob(z)
+
+    def log_prior(self):
+        return Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).log_prob(self.z)
+   
+    def nsample(self, n=1):
+        eps = Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).sample_n(n)
+        return eps * self.sigma
+
+class SO3reparameterize(nn.Module):
+    def __init__(self, reparameterize, k=10):
+        super(SO3reparameterize, self).__init__()
+            
+        self.reparameterize = reparameterize
+        self.input_dim = self.reparameterize.input_dim
+        assert self.reparameterize.z_dim == 3
         self.k = k
-
-        self.mu_linear = nn.Linear(input_dim, 3)
-        self.Ldiag_linear = nn.Linear(input_dim, 3)
-        self.Lnondiag_linear = nn.Linear(input_dim, 3)
-
+        
+        self.mu_linear = nn.Linear(self.input_dim, 3)
+       
+          
     @staticmethod
     def _lieAlgebra(v):
         """Map a point in R^N to the tangent space at the identity, i.e. 
@@ -63,74 +101,82 @@ class SO3Reparameterize(nn.Module):
             v = vector in R^N, (..., 3) in our case
         Return:
             R = v converted to Lie Algebra element, (3,3) in our case"""
-        R_x = n2p(np.array([[0., 0., 0.], [0., 0., -1.], [0., 1., 0.]]))
-        R_y = n2p(np.array([[0., 0., 1.], [0., 0., 0.], [-1., 0., 0.]]))
-        R_z = n2p(np.array([[0., -1., 0.], [1., 0., 0.], [0., 0., 0.]]))
+        is_cuda = v.is_cuda
+        R_x = n2p(np.array([[ 0., 0., 0.],[ 0., 0.,-1.],[ 0., 1., 0.]]), cuda = is_cuda)
+        R_y = n2p(np.array([[ 0., 0., 1.],[ 0., 0., 0.],[-1., 0., 0.]]), cuda = is_cuda)
+        R_z = n2p(np.array([[ 0.,-1., 0.],[ 1., 0., 0.],[ 0., 0., 0.]]), cuda = is_cuda)
 
         R = R_x * v[..., 0, None, None] + R_y * v[..., 1, None, None] + \
             R_z * v[..., 2, None, None]
         return R
-
+    
     @staticmethod
     def _expmap_rodrigues(v):
-        theta = v.norm(p=2, dim=-1, keepdim=True)
-        K = SO3Reparameterize._lieAlgebra(v / theta)
+        is_cuda = v.is_cuda
+        theta = v.norm(p=2,dim=-1, keepdim=True)
+        K = SO3reparameterize._lieAlgebra(v/theta)
         I = Variable(torch.eye(3))
-        R = I + torch.sin(theta)[..., None] * K + \
-            (1. - torch.cos(theta))[..., None] * (K @ K)
-        a = torch.sin(theta)[..., None]
+        I = I.cuda() if is_cuda else I
+        R = I + torch.sin(theta)[...,None]*K + \
+                (1. - torch.cos(theta))[...,None]*(K@K)
         return R
-
+    
     def forward(self, x, n=1):
         self.mu = self.mu_linear(x)
-        self.D = F.softplus(self.Ldiag_linear(x))
-        L = self.Lnondiag_linear(x)
-
-        self.L = torch.cat((Variable(torch.ones(torch.Size((*self.D.size()[:-1], 1)))),
-                            Variable(torch.zeros(torch.Size((*self.D.size()[:-1], 2)))),
-                            L[..., 0].unsqueeze(-1),
-                            Variable(torch.ones(torch.Size((*self.D.size()[:-1], 1)))),
-                            Variable(torch.zeros(torch.Size((*self.D.size()[:-1], 1)))),
-                            L[..., 1:],
-                            Variable(torch.ones(torch.Size((*self.D.size()[:-1], 1))))), -1).view(
-            torch.Size((*self.D.size()[:-1], 3, 3)))
-
-        self.v, self.z = self.nsample(self.mu, self.L, self.D, n=n)
-
-        return self.z
-
+        self.v = self.reparameterize(x, n)
+        
+        self.z = self.nsample(n = n)
+        return self.z.view(*self.z.size()[:-2],-1)
+    
     def kl(self):
-        kl = 0
-        return kl
-
+        log_q_z_x = self.log_posterior()
+        log_p_z = self.log_prior()
+        kl = log_q_z_x - log_p_z
+        return kl.mean(0)
+            
     def log_posterior(self):
-        theta = self.v.norm(p=2, dim=-1, keepdim=True)
-        u = self.v / theta
-        angles = Variable(torch.arange(-self.k, self.k + 1) * 2 * math.pi)
-        theta_hat = theta[..., None] + angles
-        x = u[..., None] * theta_hat
+        
+        theta = self.v.norm(p=2,dim=-1, keepdim=True) #[n,B,1]
+        u = self.v / theta #[n,B,3]
+        angles = Variable(torch.arange(-self.k, self.k+1) * 2 * math.pi) #[2k+1]
+        angles = angles.cuda() if self.v.is_cuda else angles
+         
+        theta_hat = theta[..., None, :] + angles[:,None] #[n,B,2k+1,1]
+        
+        #CLAMP FOR NUMERICAL STABILITY
+        theta_hat = torch.clamp(theta_hat, min=1e-3)
+        #theta = torch.clamp(theta, min=1e-3)
+        
+        x = u[...,None,:] * theta_hat #[n,B,2k+1,3]
+        log_p = self.reparameterize._log_posterior(x.permute([0,2,1,3]).contiguous()) #[n,(2k+1),B,3] or [n,(2k+1),B]
+        # maybe reduce last dimension
+        if len(log_p.size()) == 4:
 
-        L_hat = self.L - Variable(torch.eye(3))
-        L_inv = Variable(torch.eye(3)) - L_hat + L_hat @ L_hat
-        D_inv = 1. / self.D
-        A = L_inv @ x
-
-        p = -0.5 * (A * D_inv[..., None] * A + 2 * torch.log(theta_hat.abs()) - \
-                    torch.log(2 - 2 * torch.cos(theta_hat))).sum(-2)
-        p = logsumexp(p, -1)
-        p += -0.5 * (torch.log(self.D.prod(-1)) + self.v.size()[-1] * math.log(2. * math.pi))
-
-        return p
-
+            log_p = log_p.sum(-1) # [n,(2k+1),B]
+            
+        log_p = log_p.permute([0,2,1]) # [n,B,(2k+1)]
+        log_p.contiguous()
+        
+        log_vol =  2 * torch.log(theta_hat / (2 - (2) * torch.cos(theta_hat))) #[n,B,(2k+1),1]
+        #print (log_vol.max())
+        #print(log_vol.size())
+        log_p = log_p*log_vol.sum(-1)
+        
+        log_p = logsumexp(log_p,-1) #- (2 - (2) * torch.cos(theta)).log().sum(-1)
+       
+        return log_p
+      
     def log_prior(self):
-        # To DO :
-        return 1 / (8 * math.pi ** 2)
+        is_cuda = self.v.is_cuda
+        prior = t2p(torch.Tensor([1 / (8 * math.pi ** 2)]), cuda=is_cuda)
+        return (prior.log()).expand_as(self.z[...,0,0])
+        
 
-    @staticmethod
-    def nsample(mu, L, D, n=1):
+    def nsample(self, n=1):
         # reproduce the decomposition of L-D we make
-        eps = Normal(torch.zeros_like(mu), torch.ones_like(mu)).sample_n(n)
-        v = (L @ (D.pow(0.5) * eps)[..., None]).squeeze(-1)
-        mu_lie = SO3Reparameterize._expmap_rodrigues(mu)
-        v_lie = SO3Reparameterize._expmap_rodrigues(v)
-        return v, mu_lie @ v_lie
+        
+        mu_lie = SO3reparameterize._expmap_rodrigues(self.mu)
+        v_lie = SO3reparameterize._expmap_rodrigues(self.v)
+        return mu_lie @ v_lie
+    
+
