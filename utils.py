@@ -52,6 +52,7 @@ def deg2coo(x):
     return np.vstack((xs, ys, zs)).T
 
 def randomR():
+    """For proof, see https://math.stackexchange.com/a/138837/243884"""
     q, r = np.linalg.qr(np.random.normal(size=(3, 3)))
     r = np.diag(r)
     ret = q @ np.diag(r / np.abs(r))
