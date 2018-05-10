@@ -1,0 +1,221 @@
+
+# coding: utf-8
+
+# In[ ]:
+
+
+import os
+import torch
+from torch.autograd import Variable
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.utils.data as data_utils
+import numpy as np
+import matplotlib.pyplot as plt
+
+from vae import VAE
+from reparameterize import Nreparameterize, SO3reparameterize, N0reparameterize
+
+from torch.utils.data.dataset import Dataset
+
+
+# In[ ]:
+
+
+class View(nn.Module):
+    def __init__(self, *v):
+        super(View, self).__init__()
+        self.v = v
+    
+    def forward(self, x):
+        return x.view(*self.v)
+    
+class Flatten(nn.Module):
+    def __init__(self):
+        super(Flatten, self).__init__()
+    
+    def forward(self, x):
+        return x.view(x.size(0), -1)
+
+
+# In[ ]:
+
+
+class ConvVAE(VAE):
+    def __init__(self):
+        super(ConvVAE, self).__init__()
+        
+        self.encoder = nn.Sequential(
+            nn.Conv2d(3, 16, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            Flatten(),
+            nn.Linear(32 * 8 * 8, 256),
+            nn.ReLU(),
+            nn.Linear(256, 100),
+            nn.ReLU()
+        )
+        
+        self.decoder = nn.Sequential(
+            nn.Linear(9, 100),
+            nn.ReLU(),
+            nn.Linear(100, 256),
+            nn.ReLU(),
+            nn.Linear(256, 32 * 8 * 8),
+            View(-1, 32, 8, 8),
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.ReLU(),
+            nn.Conv2d(32, 16, 3, padding=1),
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.ReLU(),
+            nn.Conv2d(16, 3, 3, padding=1),
+            nn.Sigmoid()
+        )
+        
+#         self.rep0 = Nreparameterize(100, z_dim=3)
+        self.rep0 = N0reparameterize(100, z_dim=3)
+        self.rep1 = SO3reparameterize(self.rep0)
+        
+        self.r_callback = [self.useless_f]
+        
+        self.reparameterize = [self.rep1] # [self.rep0]
+        
+    def useless_f(self, x):
+        return x
+    
+    def recon_loss(self, x_recon, x):
+        return ((x_recon - x) ** 2).sum(-1).sum(-1).sum(-1)
+
+
+# In[ ]:
+
+
+model = ConvVAE()
+
+
+# In[ ]:
+
+
+# dir_ = 'imgs_jpg'
+# images = np.array([plt.imread(os.path.join(dir_, filename)) for filename in os.listdir(dir_)])
+# labels = np.load('cube-1.13.3.npy')
+# np.save('images.npy', images)
+# np.save('labels.npy', labels)
+
+images = np.load('cubes_images.npy') / 255
+labels = np.load('cubes_labels.npy') / 255
+
+train_data = torch.from_numpy(images.transpose(0, 3, 1, 2).astype(np.float32))
+train_labels = torch.from_numpy(labels.astype(np.int64))
+
+batch_size = 16
+train_dataset = data_utils.TensorDataset(train_data, train_labels)
+train_loader = data_utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+
+# In[ ]:
+
+
+# decoder = nn.Sequential(
+#     nn.Linear(100, 256),
+#     View(4, 8, 8),
+#     nn.Upsample(scale_factor=2, mode='nearest'),
+#     nn.ReLU(),
+#     nn.Conv2d(4, 8, 3, padding=1),
+#     nn.Upsample(scale_factor=2, mode='nearest'),
+#     nn.ReLU(),
+#     nn.Conv2d(8, 3, 3, padding=1),
+#     nn.Sigmoid()
+# )
+
+
+# In[ ]:
+
+
+# images, labels = next(iter(train_loader))
+# images = Variable(images)
+
+
+# In[ ]:
+
+
+# torch.save(model, 'filename.pt')
+# model = torch.load('filename.pt')
+
+
+# In[ ]:
+
+
+optimizer = torch.optim.Adam(model.parameters())
+
+
+# In[ ]:
+
+
+for j in range(10):
+    print(j)
+    for i, (images, labels) in enumerate(train_loader):
+        images = Variable(images)
+
+        optimizer.zero_grad()
+        
+        recon, kl = model.elbo(images)
+        loss = (recon + kl).mean()
+        
+        loss.backward()
+        optimizer.step()
+        print('\r', i, '/', len(train_loader), ':', loss.data.cpu().numpy()[0], '-', 
+              recon.mean().data.cpu().numpy()[0], end='')
+    torch.save(model, 'filename.pt')
+    print()
+
+
+# In[ ]:
+
+
+# optimizer = torch.optim.Adam(list(encoder.parameters()) + list(decoder.parameters()), lr=1e-3)
+
+
+# In[ ]:
+
+
+# for j in range(10):
+#     print(j)
+#     for i, (images, labels) in enumerate(train_loader):
+#         images = Variable(images)
+
+#         optimizer.zero_grad()
+#         recon = decoder(encoder(images))
+#         loss = ((recon - images) ** 2).sum(-1).sum(-1).sum(-1).mean()
+#         loss.backward()
+#         optimizer.step()
+#         print('\r', i, '/', len(train_loader), ':', loss.data.cpu().numpy()[0], end='')
+#     print()
+
+
+# In[ ]:
+
+
+# img = Variable(next(iter(train_loader))[0][0:1])
+# rec_img = decoder(encoder(img))
+
+# plt.imshow(img.data.cpu().numpy()[0].transpose(1, 2, 0))
+# plt.show()
+# plt.imshow(rec_img.data.cpu().numpy()[0].transpose(1, 2, 0))
+# plt.show()
+
+
+# In[ ]:
+
+
+img = Variable(next(iter(train_loader))[0][0:1])
+rec_img = model(img)
+
+plt.imshow(img.data.cpu().numpy()[0].transpose(1, 2, 0))
+plt.show()
+plt.imshow(rec_img.data.cpu().numpy()[0].transpose(1, 2, 0))
+plt.show()
+
