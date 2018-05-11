@@ -69,10 +69,8 @@ def log_map(R):
     Uses https://en.wikipedia.org/wiki/Rotation_group_SO(3)#Logarithm_map
     """
     anti_sym = .5 * (R - R.transpose(-1, -2))
-    matrix_norm = anti_sym.pow(2).sum(-1, keepdim=True).sum(-2, keepdim=True).sqrt()
-    norm = matrix_norm / np.sqrt(2)  # Matrix has vector elements twice
-    m = torch.asin(norm) / norm * anti_sym
-    return m
+    theta = torch.acos(.5 * (torch.trace(R)-1))
+    return theta / torch.sin(theta) * anti_sym
 
 
 def log_density(v, L, D, k = 10):
@@ -118,18 +116,19 @@ def test_algebra_maps():
     np.testing.assert_allclose(matrices_prime.detach().numpy(), matrices.detach().numpy())
 
 
-def test_log_exp():
+def test_log_exp(scale, error):
     for _ in range(50):
-        v_start = torch.randn(3) * 0.1
+        v_start = torch.randn(3) * scale
         R = rodrigues(v_start)
         v = map2LieVector(log_map(R))
         R_prime = rodrigues(v)
         v_prime = map2LieVector(log_map(R_prime))
-        np.testing.assert_allclose(R_prime.detach(), R.detach(), rtol=1E-5)
-        np.testing.assert_allclose(v_prime.detach(), v.detach(), rtol=1E-5)
+        np.testing.assert_allclose(R_prime.detach(), R.detach(), rtol=error)
+        np.testing.assert_allclose(v_prime.detach(), v.detach(), rtol=error)
 
 
 if __name__ == '__main__':
     test_algebra_maps()
-    test_log_exp()
+    test_log_exp(0.1, 1E-5)
+    test_log_exp(10, 2E-2)
 
