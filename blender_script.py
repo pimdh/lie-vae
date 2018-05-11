@@ -3,8 +3,8 @@
 # Also produces depth map at the same time.
 #
 # Example:
-# x
-# blender --background --python blender_script.py -- --scale 0.8 --views 10 assets/chair.obj --out ./shapes
+# blender --background --python blender_script.py -- --scale 0.9 --views 100000 assets/chair.obj \
+#     --output_folder ./shapes --output_size 64x64
 #
 # ShapenetCore: http://shapenet.cs.stanford.edu/shapenet/obj-zip/ShapeNetCore.v2.zip
 #
@@ -31,6 +31,8 @@ parser.add_argument('--color_depth', type=str, default='8',
                     help='Number of bit per channel used for output. Either 8 or 16.')
 parser.add_argument('--format', type=str, default='PNG',
                     help='Format of files generated. Either PNG or OPEN_EXR')
+parser.add_argument('--output_size', type=str, default='600x600',
+                    help='Output size, e.g.: 600x600')
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 args = parser.parse_args(argv)
@@ -108,10 +110,10 @@ def parent_obj_to_camera(b_camera):
 
 
 scene = bpy.context.scene
-scene.render.resolution_x = 600
-scene.render.resolution_y = 600
+dims = [int(x) for x in args.output_size.split('x')]
+scene.render.resolution_x, scene.render.resolution_y = dims
 scene.render.resolution_percentage = 100
-scene.render.alpha_mode = 'TRANSPARENT'
+# scene.render.alpha_mode = 'TRANSPARENT'
 cam = scene.objects['Camera']
 # cam.location = (0, 1, 0.6)
 cam.location = (0, 1, 0)
@@ -123,7 +125,7 @@ b_empty = parent_obj_to_camera(cam)
 cam_constraint.target = b_empty
 
 fp = os.path.join(args.output_folder, args.obj)
-scene.render.image_settings.file_format = 'PNG'  # set output format to .png
+scene.render.image_settings.file_format = 'JPEG'  # set output format to .png
 
 import numpy as np
 # Uniform quaternion sampling
