@@ -33,6 +33,8 @@ parser.add_argument('--format', type=str, default='PNG',
                     help='Format of files generated. Either PNG or OPEN_EXR')
 parser.add_argument('--output_size', type=str, default='600x600',
                     help='Output size, e.g.: 600x600')
+parser.add_argument('--quaternion', type=str,
+                    help='Compute one fixed quaternion. 4 floats separated by commas')
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 args = parser.parse_args(argv)
@@ -139,8 +141,12 @@ quaternions = np.stack((
 ), 1).round(decimals=4)
 
 
-for i in range(0, args.views):
-    quaternion = quaternions[i]
+num_views = 1 if args.quaternion else args.views
+for i in range(num_views):
+    if args.quaternion:
+        quaternion = [float(x) for x in args.quaternion.split(',')]
+    else:
+        quaternion = quaternions[i]
     print("Quaternion {}: {}".format(i + 1, quaternion))
 
     b_empty.rotation_quaternion = tuple(float(x) for x in quaternion)

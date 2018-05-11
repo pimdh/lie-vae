@@ -51,12 +51,7 @@ class ShapeDataset(Dataset):
         filename = self.files[idx]
         image = Image.open(filename)
         image_tensor = torch.tensor(np.array(image), dtype=torch.float32) / 255
-
-        # Remove extension, then retrieve _ separated floats
-        quaternion = [float(x)
-                      for x in filename[:-len('.jpg')].split('_')[-4:]]
-
-        # Make gray scale
+        quaternion = self.filename_to_quaternion(filename)
         image_tensor = image_tensor.mean(-1)
 
         group_el = quaternion
@@ -65,6 +60,11 @@ class ShapeDataset(Dataset):
             group_el = self.transformer(group_el)
 
         return group_el, image_tensor
+
+    @staticmethod
+    def filename_to_quaternion(filename):
+        """Remove extension, then retrieve _ separated floats"""
+        return [float(x) for x in filename[:-len('.jpg')].split('_')[-4:]]
 
 
 class DeconvNet(nn.Sequential):
@@ -175,6 +175,16 @@ def train(epoch, train_loader, test_loader, net, optimizer, log):
             print(it+1, train_loss, test_loss)
 
 
+def generate_image(quaternion, transformer_fn, net, path):
+    """Render image for certain quaternion and write to path."""
+    x = transformer_fn(quaternion)
+    reconstruction = net(x.to(device)[None])[0]
+    image_data = (reconstruction * 255).byte()
+    image_array = image_data.detach().to('cpu').numpy()
+    im = Image.fromarray(image_array)
+    im.convert('RGB').save(path)
+
+
 def main():
     args = parse_args()
     degrees = 3
@@ -200,17 +210,25 @@ def main():
                              shuffle=True, num_workers=5)
     optimizer = torch.optim.Adam(net.parameters())
 
-    for epoch in range(10):
+    for epoch in range(args.num_its):
         train(epoch, train_loader, test_loader, net, optimizer, log)
 
     log.close()
+
+    # Generate demo image
+    filename = './shapes/assets/chair.obj_0.0336_-0.1523_-0.5616_-0.8126.jpg'
+    q = ShapeDataset.filename_to_quaternion(filename)
+    generate_image(q, transformer_fn, net, args.mode+'.jpg')
+    torch.save(net.state_dict(), args.mode+'.pickle')
 
 
 def parse_args():
     parser = argparse.ArgumentParser('Supervised experiment')
     parser.add_argument('--mode', required=True,
                         help='[action, mlp]')
-    parser.add_argument('--log_dir', required=True)
+    parser.add_argument('--num_its', type=int, default=10)
+    parser.add_argument('--log_dir')
+    parser.add_argument('--save_path')
     return parser.parse_args()
 
 
