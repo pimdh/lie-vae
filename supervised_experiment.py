@@ -218,8 +218,8 @@ def main():
     # Generate demo image
     filename = './shapes/assets/chair.obj_0.0336_-0.1523_-0.5616_-0.8126.jpg'
     q = ShapeDataset.filename_to_quaternion(filename)
-    generate_image(q, transformer_fn, net, args.mode+'.jpg')
-    torch.save(net.state_dict(), args.mode+'.pickle')
+    generate_image(q, transformer_fn, net, 'supervised_outputs/'+args.mode+'.jpg')
+    torch.save(net.state_dict(), 'supervised_outputs/'+args.mode+'.pickle')
 
 
 def parse_args():
