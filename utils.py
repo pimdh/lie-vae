@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from torch.distributions import Normal
 from torch.optim import Adam
 from itertools import accumulate
+from torch.utils.data import Dataset
 
 
 def n2p(x, requires_grad = True):
@@ -97,7 +98,8 @@ def next_batch(batch_dim, letter='L', size=6):
     return originalL, rotatedL, rotations
 
 
-class Subset(torch.utils.data.Dataset):
+# Some code from master branch that allows for random dataset splits
+class Subset(Dataset):
     def __init__(self, dataset, indices):
         self.dataset = dataset
         self.indices = indices

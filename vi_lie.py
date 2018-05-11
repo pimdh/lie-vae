@@ -39,8 +39,19 @@ def map2LieAlgebra(v):
         R_z * v[..., 2, None, None]
     return R
 
+
+def map2LieVector(X):
+    """Map Lie algebra in ordinary (3, 3) matrix rep to vector.
+
+    In literature known as 'vee' map.
+
+    inverse of map2LieAlgebra
+    """
+    return torch.stack((-X[..., 1, 2], X[..., 0, 2], -X[..., 0, 1]), -1)
+
+
 def rodrigues(v):
-    theta = v.norm(p=2,dim=-1, keepdim=True)
+    theta = v.norm(p=2, dim=-1, keepdim=True)
     # normalize K
     K = map2LieAlgebra(v/theta)
 
@@ -48,6 +59,21 @@ def rodrigues(v):
     R = I + torch.sin(theta)[...,None]*K + (1. - torch.cos(theta))[...,None]*(K@K)
     a = torch.sin(theta)[...,None]
     return R
+
+
+def log_map(R):
+    """Map Matrix SO(3) element to Algebra element.
+
+    Input is taken to be 3x3 matrices of ordinary representation.
+    Output algebra element in 3x3 L_i representation.
+    Uses https://en.wikipedia.org/wiki/Rotation_group_SO(3)#Logarithm_map
+    """
+    anti_sym = .5 * (R - R.transpose(-1, -2))
+    matrix_norm = anti_sym.pow(2).sum(-1, keepdim=True).sum(-2, keepdim=True).sqrt()
+    norm = matrix_norm / np.sqrt(2)  # Matrix has vector elements twice
+    m = torch.asin(norm) / norm * anti_sym
+    return m
+
 
 def log_density(v, L, D, k = 10):
     theta = v.norm(p=2,dim=-1, keepdim=True)
@@ -80,3 +106,30 @@ def get_sample(N, x_mb, xo, var_noise=True):
 
     xrot_recon = (n2p(xo) @ g_lie).data.numpy()
     return xrot_recon
+
+
+def test_algebra_maps():
+    vs = torch.randn(100, 3)
+    matrices = map2LieAlgebra(vs)
+    vs_prime = map2LieVector(matrices)
+    matrices_prime = map2LieAlgebra(vs_prime)
+
+    np.testing.assert_allclose(vs_prime.detach().numpy(), vs.detach().numpy())
+    np.testing.assert_allclose(matrices_prime.detach().numpy(), matrices.detach().numpy())
+
+
+def test_log_exp():
+    for _ in range(50):
+        v_start = torch.randn(3) * 0.1
+        R = rodrigues(v_start)
+        v = map2LieVector(log_map(R))
+        R_prime = rodrigues(v)
+        v_prime = map2LieVector(log_map(R_prime))
+        np.testing.assert_allclose(R_prime.detach(), R.detach(), rtol=1E-5)
+        np.testing.assert_allclose(v_prime.detach(), v.detach(), rtol=1E-5)
+
+
+if __name__ == '__main__':
+    test_algebra_maps()
+    test_log_exp()
+

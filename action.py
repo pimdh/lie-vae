@@ -166,13 +166,13 @@ def train(epoch, train_loader, test_loader, net, optimizer, log):
 
         losses.append(loss.item())
 
-        if (it + 1) % 500 == 0 or it + 1 == len(train_loader):
-            train_loss = np.mean(losses[-500:])
+        if (it + 1) % 1250 == 0 or it + 1 == len(train_loader):
+            train_loss = np.mean(losses[-1250:])
             global_it = epoch * len(train_loader) + it + 1
             log.add_scalar('train_loss', train_loss, global_it)
             test_loss = test(test_loader, net)
             log.add_scalar('test_loss', test_loss, global_it)
-            print(it+1, train_loss, test_loss)
+            print(global_it, train_loss, test_loss)
 
 
 def generate_image(quaternion, transformer_fn, net, path):
