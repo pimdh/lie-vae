@@ -40,10 +40,10 @@ class Nreparameterize(nn.Module):
         return self._log_posterior(self.z)
 
     def _log_posterior(self, z):
-        return Normal(self.mu, self.sigma).log_prob(z)
+        return Normal(self.mu, self.sigma).log_prob(z).sum(-1)
 
     def log_prior(self):
-        return Normal(torch.zeros_like(self.mu), torch.ones_like(self.sigma)).log_prob(self.z)
+        return Normal(torch.zeros_like(self.mu), torch.ones_like(self.sigma)).log_prob(self.z).sum(-1)
    
     def nsample(self, n=1):
         eps = Normal(torch.zeros_like(self.mu), torch.ones_like(self.mu)).sample_n(n)
@@ -156,8 +156,9 @@ class SO3reparameterize(nn.Module):
             
         log_p = log_p.permute([0,2,1]) # [n,B,(2k+1)]
         log_p.contiguous()
+        cos_theta_hat = torch.clamp(torch.cos(theta_hat), min = -1 + 1e-3, max = 1 - 1e-3)
         
-        log_vol =  2 * torch.log(theta_hat / (2 - (2) * torch.cos(theta_hat))) #[n,B,(2k+1),1]
+        log_vol =  2 * torch.log(theta_hat / (2 - (2) * cos_theta_hat )) #[n,B,(2k+1),1]
         #print (log_vol.max())
         #print(log_vol.size())
         log_p = log_p*log_vol.sum(-1)
