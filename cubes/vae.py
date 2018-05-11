@@ -55,10 +55,10 @@ class VAE(nn.Module):
     def log_likelihood(self, x, n=1):
         x_recon = self.forward(x, n)
   
-        log_p_z = torch.cat([r.log_prior() for r in self.reparameterize], -1).sum(-1)
-        log_q_z_x = torch.cat([r.log_posterior() for r in self.reparameterize], -1).sum(-1)
+        log_p_z = torch.cat([r.log_prior() for r in self.reparameterize], -1)
+        log_q_z_x = torch.cat([r.log_posterior() for r in self.reparameterize], -1)
         log_p_x_z = - self.recon_loss(x_recon, x)
-        
+
         return (logsumexp(log_p_x_z + log_p_z - log_q_z_x, dim=0) - np.log(n)).mean()
 
 

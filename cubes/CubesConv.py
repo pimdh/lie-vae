@@ -41,6 +41,31 @@ class Flatten(nn.Module):
 # In[ ]:
 
 
+class Decoder(nn.Module):
+    
+    def __init__(self):
+        super(Decoder, self).__init__()
+        
+        self.__decoder_f = nn.Sequential(
+            nn.Linear(9, 100),
+            nn.ReLU(),
+            nn.Linear(100, 256),
+            nn.ReLU(),
+            nn.Linear(256, 32 * 8 * 8),
+            View(-1, 32, 8, 8),
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.ReLU(),
+            nn.Conv2d(32, 16, 3, padding=1),
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.ReLU(),
+            nn.Conv2d(16, 3, 3, padding=1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, z):
+        h = self.__decoder_f(z)
+        return h.view(z.size()[0], z.size()[1], 3, 32, 32)
+
 class ConvVAE(VAE):
     def __init__(self):
         super(ConvVAE, self).__init__()
@@ -58,23 +83,7 @@ class ConvVAE(VAE):
             nn.Linear(256, 100),
             nn.ReLU()
         )
-        
-        self.decoder = nn.Sequential(
-            nn.Linear(9, 100),
-            nn.ReLU(),
-            nn.Linear(100, 256),
-            nn.ReLU(),
-            nn.Linear(256, 32 * 8 * 8),
-            View(-1, 32, 8, 8),
-            nn.Upsample(scale_factor=2, mode='nearest'),
-            nn.ReLU(),
-            nn.Conv2d(32, 16, 3, padding=1),
-            nn.Upsample(scale_factor=2, mode='nearest'),
-            nn.ReLU(),
-            nn.Conv2d(16, 3, 3, padding=1),
-            nn.Sigmoid()
-        )
-        
+
 #         self.rep0 = Nreparameterize(100, z_dim=3)
         self.rep0 = N0reparameterize(100, z_dim=3)
         self.rep1 = SO3reparameterize(self.rep0)
@@ -82,7 +91,9 @@ class ConvVAE(VAE):
         self.r_callback = [self.useless_f]
         
         self.reparameterize = [self.rep1] # [self.rep0]
-        
+
+        self.decoder = Decoder()
+    
     def useless_f(self, x):
         return x
     
@@ -111,7 +122,7 @@ labels = np.load('cubes_labels.npy') / 255
 train_data = torch.from_numpy(images.transpose(0, 3, 1, 2).astype(np.float32))
 train_labels = torch.from_numpy(labels.astype(np.int64))
 
-batch_size = 16
+batch_size = 32
 train_dataset = data_utils.TensorDataset(train_data, train_labels)
 train_loader = data_utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
@@ -169,7 +180,9 @@ for j in range(10):
         optimizer.step()
         print('\r', i, '/', len(train_loader), ':', loss.data.cpu().numpy()[0], '-', 
               recon.mean().data.cpu().numpy()[0], end='')
-    torch.save(model, 'filename.pt')
+
+    torch.save(model, 'so3.pt')
+    print(model.log_likelihood(Variable(train_data[:100]), n=5).data.cpu().numpy()[0])
     print()
 
 
@@ -180,42 +193,4 @@ for j in range(10):
 
 
 # In[ ]:
-
-
-# for j in range(10):
-#     print(j)
-#     for i, (images, labels) in enumerate(train_loader):
-#         images = Variable(images)
-
-#         optimizer.zero_grad()
-#         recon = decoder(encoder(images))
-#         loss = ((recon - images) ** 2).sum(-1).sum(-1).sum(-1).mean()
-#         loss.backward()
-#         optimizer.step()
-#         print('\r', i, '/', len(train_loader), ':', loss.data.cpu().numpy()[0], end='')
-#     print()
-
-
-# In[ ]:
-
-
-# img = Variable(next(iter(train_loader))[0][0:1])
-# rec_img = decoder(encoder(img))
-
-# plt.imshow(img.data.cpu().numpy()[0].transpose(1, 2, 0))
-# plt.show()
-# plt.imshow(rec_img.data.cpu().numpy()[0].transpose(1, 2, 0))
-# plt.show()
-
-
-# In[ ]:
-
-
-img = Variable(next(iter(train_loader))[0][0:1])
-rec_img = model(img)
-
-plt.imshow(img.data.cpu().numpy()[0].transpose(1, 2, 0))
-plt.show()
-plt.imshow(rec_img.data.cpu().numpy()[0].transpose(1, 2, 0))
-plt.show()
 

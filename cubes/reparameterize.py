@@ -72,10 +72,10 @@ class N0reparameterize(nn.Module):
         return self._log_posterior(self.z)
 
     def _log_posterior(self, z):
-        return Normal(torch.zeros_like(self.sigma), self.sigma).log_prob(z)
+        return Normal(torch.zeros_like(self.sigma), self.sigma).log_prob(z).sum(-1)
 
     def log_prior(self):
-        return Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).log_prob(self.z)
+        return Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).log_prob(self.z).sum(-1)
    
     def nsample(self, n=1):
         eps = Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).sample_n(n)
@@ -162,7 +162,7 @@ class SO3reparameterize(nn.Module):
         #print(log_vol.size())
         log_p = log_p*log_vol.sum(-1)
         
-        log_p = logsumexp(log_p,-1) #- (2 - (2) * torch.cos(theta)).log().sum(-1)
+        log_p = logsumexp(log_p,-1) - np.log(8 * (np.pi ** 2)) #- (2 - (2) * torch.cos(theta)).log().sum(-1)
        
         return log_p
       
