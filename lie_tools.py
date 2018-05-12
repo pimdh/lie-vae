@@ -3,6 +3,13 @@ import torch
 from torch.autograd import Variable
 from utils import n2p, randomR
 from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
+from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense \
+    import Jd as Jd_np
+from lie_learn.representations.SO3.wigner_d import \
+    wigner_D_matrix as reference_wigner_D_matrix
+
+
+Jd = [torch.tensor(J, dtype=torch.float32) for J in Jd_np]
 
 
 def map2LieAlgebra(v):
@@ -110,12 +117,36 @@ def group_matrix_to_quaternions(r):
 
 
 def quaternions_to_eazyz(q):
-    """Map quaternion to Euler angle ZYZ."""
+    """Map batch of quaternion to Euler angles ZYZ."""
     return torch.stack([
-        torch.atan2(q[:, 1] * q[:, 2] - q[:, 0] * q[:, 3], q[:, 0] * q[:, 2] + q[:, 1] * q[:, 3]),
-        torch.acos(np.clip(q[:, 3] ** 2 - q[:, 0] ** 2 - q[:, 1] ** 2 + q[:, 2] ** 2, -1.0, 1.0)),
+        torch.atan2(q[:, 1] * q[:, 2] - q[:, 0] * q[:, 3], q[:, 0] * q[:, 2]+ q[:, 1] * q[:, 3]),
+        torch.acos(torch.clamp(q[:, 3] ** 2 - q[:, 0] ** 2 - q[:, 1] ** 2 + q[:, 2] ** 2, -1.0, 1.0)),
         torch.atan2(q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2], q[:, 1] * q[:, 3] - q[:, 0] * q[:, 2])
     ], 1).remainder(2 * np.pi)
+
+
+def group_matrix_to_eazyz(r):
+    """Map batch of SO(3) matrices to Euler angles ZYZ."""
+    return quaternions_to_eazyz(group_matrix_to_quaternions(r))
+
+
+def _z_rot_mat(angle, l):
+    m = torch.zeros((angle.size(0), 2 * l + 1, 2 * l + 1), dtype=torch.float32)
+    inds = torch.arange(0, 2 * l + 1, 1, dtype=torch.long)
+    reversed_inds = torch.arange(2 * l, -1, -1, dtype=torch.long)
+    frequencies = torch.arange(l, -l - 1, -1, dtype=torch.float32)[None]
+    m[:, inds, reversed_inds] = torch.sin(frequencies * angle[:, None])
+    m[:, inds, inds] = torch.cos(frequencies * angle[:, None])
+    return m
+
+
+def wigner_d_matrix(angles, l):
+    """Create wigner D matrices for batch of ZYZ Euler anglers for degree l."""
+    J = Jd[l][None]
+    x_a = _z_rot_mat(angles[:, 0], l)
+    x_b = _z_rot_mat(angles[:, 1], l)
+    x_c = _z_rot_mat(angles[:, 2], l)
+    return x_a.matmul(J).matmul(x_b).matmul(J).matmul(x_c)
 
 
 # Tests
@@ -136,8 +167,10 @@ def test_log_exp(scale, error):
         v = map2LieVector(log_map(R))
         R_prime = rodrigues(v)
         v_prime = map2LieVector(log_map(R_prime))
-        np.testing.assert_allclose(R_prime.detach(), R.detach(), rtol=error)
-        np.testing.assert_allclose(v_prime.detach(), v.detach(), rtol=error)
+        np.testing.assert_allclose(R_prime.detach(), R.detach(),
+                                   rtol=error, atol=error)
+        np.testing.assert_allclose(v_prime.detach(), v.detach(),
+                                   rtol=error, atol=error)
 
 
 def test_coordinate_changes():
@@ -146,16 +179,32 @@ def test_coordinate_changes():
 
     q_reference = SO3_coordinates(r.numpy().astype(np.float64), 'MAT', 'Q')
     q = group_matrix_to_quaternions(r)
-    np.testing.assert_allclose(q, q_reference, rtol=1E-5)
+    np.testing.assert_allclose(q, q_reference, rtol=1E-5, atol=1E-5)
 
     ea_reference = SO3_coordinates(q.numpy().astype(np.float64), 'Q', 'EA323')
     ea = quaternions_to_eazyz(q)
-    np.testing.assert_allclose(ea, ea_reference, rtol=1E-4)
+    np.testing.assert_allclose(ea, ea_reference, rtol=1E-5, atol=1E-5)
+
+
+def test_wigner_d_matrices():
+    for l in range(5):
+        r = torch.stack(
+            [torch.tensor(randomR(), dtype=torch.float32)
+             for _ in range(10000)], 0)
+        angles = group_matrix_to_eazyz(r)
+
+        reference = np.stack([reference_wigner_D_matrix(l, *angle.numpy().T)
+                              for angle in angles], 0)
+
+        matrices = wigner_d_matrix(angles, l)
+
+        np.testing.assert_allclose(matrices, reference, rtol=1E-4, atol=1E-5)
 
 
 if __name__ == '__main__':
-    # test_algebra_maps()
-    # test_log_exp(0.1, 1E-5)
-    # test_log_exp(10, 2E-2)
+    test_algebra_maps()
+    test_log_exp(0.1, 1E-5)
+    test_log_exp(10, 2E-4)
     test_coordinate_changes()
+    test_wigner_d_matrices()
 
