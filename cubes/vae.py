@@ -36,10 +36,9 @@ class VAE(nn.Module):
     def forward(self, x, n=1):
         z = self.encode(x, n=n)
 
-        # flatten and stack z
-        z_cat = torch.cat([v.view(n, x.size()[0], -1) for v in z], -1)
+        # we do not stack anymore to allow the decoder to use differently each input
 
-        return self.decode(z_cat)
+        return self.decode(*z)
 
     def recon_loss(self, x_recon, x):
         raise NotImplemented
