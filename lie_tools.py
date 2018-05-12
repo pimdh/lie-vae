@@ -8,8 +8,14 @@ from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense \
 from lie_learn.representations.SO3.wigner_d import \
     wigner_D_matrix as reference_wigner_D_matrix
 
+device_strings = ['cpu']
+for i in range(torch.cuda.device_count()):
+    device_strings.append('cuda:%d' % i)
 
-Jd = [torch.tensor(J, dtype=torch.float32) for J in Jd_np]
+# Copy to all devices
+Jd = {d: [torch.tensor(J, dtype=torch.float32, device=d) for J in Jd_np]
+      for d in device_strings}
+
 
 
 def map2LieAlgebra(v):
@@ -131,22 +137,57 @@ def group_matrix_to_eazyz(r):
 
 
 def _z_rot_mat(angle, l):
-    m = torch.zeros((angle.size(0), 2 * l + 1, 2 * l + 1), dtype=torch.float32)
-    inds = torch.arange(0, 2 * l + 1, 1, dtype=torch.long)
-    reversed_inds = torch.arange(2 * l, -1, -1, dtype=torch.long)
-    frequencies = torch.arange(l, -l - 1, -1, dtype=torch.float32)[None]
+    m = torch.zeros(
+        (angle.size(0), 2 * l + 1, 2 * l + 1),
+        dtype=torch.float32, device=angle.device)
+
+    inds = torch.arange(
+        0, 2 * l + 1, 1, dtype=torch.long, device=angle.device)
+    reversed_inds = torch.arange(
+        2 * l, -1, -1, dtype=torch.long, device=angle.device)
+
+    frequencies = torch.arange(
+        l, -l - 1, -1, dtype=torch.float32, device=angle.device)[None]
+
     m[:, inds, reversed_inds] = torch.sin(frequencies * angle[:, None])
     m[:, inds, inds] = torch.cos(frequencies * angle[:, None])
     return m
 
 
-def wigner_d_matrix(angles, l):
+def wigner_d_matrix(angles, degree):
     """Create wigner D matrices for batch of ZYZ Euler anglers for degree l."""
-    J = Jd[l][None]
-    x_a = _z_rot_mat(angles[:, 0], l)
-    x_b = _z_rot_mat(angles[:, 1], l)
-    x_c = _z_rot_mat(angles[:, 2], l)
+    J = Jd[str(angles.device)][degree][None]
+    x_a = _z_rot_mat(angles[:, 0], degree)
+    x_b = _z_rot_mat(angles[:, 1], degree)
+    x_c = _z_rot_mat(angles[:, 2], degree)
     return x_a.matmul(J).matmul(x_b).matmul(J).matmul(x_c)
+
+
+def block_wigner_matrix_multiply(angles, data, max_degree):
+    """Transform data using wigner d matrices for all degrees.
+
+    vector_dim is dictated by max_degree by the expression:
+    vector_dim = \sum_{i=0}^max_degree (2 * max_degree + 1) = (max_degree+1)^2
+
+    The representation is the direct sum of the irreps of the degrees up to max.
+    The computation is equivalent to a block-wise matrix multiply.
+
+    The data are the Fourier modes of a R^{data_dim} signal.
+
+    Input:
+    - angles (batch, 3)  ZYZ Euler angles
+    - vector (batch, vector_dim, data_dim)
+
+    Output: (batch, vector_dim, data_dim)
+    """
+    outputs = []
+    start = 0
+    for degree in range(max_degree+1):
+        dim = 2 * degree + 1
+        matrix = wigner_d_matrix(angles, degree)
+        outputs.append(matrix.bmm(data[:, start:start+dim, :]))
+        start += dim
+    return torch.cat(outputs, 1)
 
 
 # Tests

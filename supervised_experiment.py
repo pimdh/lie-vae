@@ -14,35 +14,31 @@ spectrum to 2D pixel space with the visualisation network.
 The visualisation network and the original spectrum vector are learned through
 MSE reconstruction loss.
 
-Throughout we use ZXZ Euler angles to represent the group element. We use:
-https://en.wikipedia.org/wiki/Wigner_D-matrix
+The input data is stored as quaternions, but we convert them to rotation matrices.
 
 Uses https://github.com/AMLab-Amsterdam/lie_learn
 """
 import torch
 import torch.nn as nn
 import numpy as np
-from scipy.linalg import block_diag
-from functools import partial
 from glob import glob
 from torch.utils.data import Dataset, DataLoader
 import os.path
 from PIL import Image
 from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
-from lie_learn.representations.SO3.wigner_d import wigner_D_matrix
 from tensorboardX import SummaryWriter
 import argparse
 from utils import MLP, random_split
+from lie_tools import group_matrix_to_eazyz, block_wigner_matrix_multiply
 
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 class ShapeDataset(Dataset):
-    def __init__(self, directory, transformer_fn=None):
+    def __init__(self, directory):
         self.directory = directory
         self.files = glob(os.path.join(directory, '**/*.jpg'))
-        self.transformer = transformer_fn
 
     def __len__(self):
         return len(self.files)
@@ -54,11 +50,8 @@ class ShapeDataset(Dataset):
         quaternion = self.filename_to_quaternion(filename)
         image_tensor = image_tensor.mean(-1)
 
-        group_el = quaternion
-
-        if self.transformer:
-            group_el = self.transformer(group_el)
-
+        group_el = torch.tensor(SO3_coordinates(quaternion, 'Q', 'MAT'),
+                                dtype=torch.float32)
         return group_el, image_tensor
 
     @staticmethod
@@ -87,8 +80,9 @@ class ActionNet(nn.Module):
     """Uses proper group action."""
     def __init__(self, degrees, in_dims=10, with_mlp=False):
         super().__init__()
+        self.degrees = degrees
         self.in_dims = in_dims
-        self.matrix_dims = int(np.sum(np.arange(degrees+1) * 2 + 1))
+        self.matrix_dims = (degrees + 1) ** 2
         self.item_rep = nn.Parameter(torch.randn((self.matrix_dims, in_dims)))
         self.deconv = DeconvNet(self.matrix_dims * self.in_dims, 50)
         if with_mlp:
@@ -98,8 +92,12 @@ class ActionNet(nn.Module):
             self.mlp = None
 
     def forward(self, matrices):
-        """Input dim is [batch, matrix_dims, matrix_dims]."""
-        item = torch.einsum('bij,jd->bid', (matrices, self.item_rep)) \
+        """Input dim is [batch, 3, 3]."""
+        n = matrices.size(0)
+        item_expanded = self.item_rep.expand(n, -1, -1)
+
+        angles = group_matrix_to_eazyz(matrices)
+        item = block_wigner_matrix_multiply(angles, item_expanded, self.degrees) \
             .view(-1, self.matrix_dims * self.in_dims)
 
         if self.mlp:
@@ -108,38 +106,18 @@ class ActionNet(nn.Module):
         return out[:, 0, :, :]
 
 
-class AngleMLPNet(nn.Module):
-    """Uses MLP from group angles."""
+class MLPNet(nn.Module):
+    """Uses MLP from group matrix."""
     def __init__(self, degrees, in_dims=10):
         super().__init__()
-        matrix_dims = int(np.sum(np.arange(degrees+1) * 2 + 1))
-        self.mlp = MLP(3, matrix_dims * in_dims, 50, 3)
+        matrix_dims = (degrees + 1) ** 2
+        self.mlp = MLP(3 * 3, matrix_dims * in_dims, 50, 3)
         self.deconv = DeconvNet(matrix_dims * in_dims, 50)
 
-    def forward(self, angles):
-        return self.deconv(self.mlp(angles)[:, :, None, None])[:, 0, :, :]
-
-
-def block_wigner_d(max_degrees, angles):
-    """Create block diagonal of multiple wigner d functions."""
-    degree_matrices = [wigner_D_matrix(degree, *angles)
-                       for degree in range(max_degrees+1)]
-
-    block_form = block_diag(*degree_matrices)
-    return torch.tensor(block_form, dtype=torch.float32)
-
-
-def wigner_transformer(max_degrees, quaternion):
-    """Map to ZYZ angles and then to blocked Wigned D matrices."""
-    # To ZYZ euler angles
-    angles = SO3_coordinates(quaternion, 'Q', 'EA323')
-    return block_wigner_d(max_degrees, angles)
-
-
-def angle_transformer(quaternion):
-    """Map to ZYZ Euler angles."""
-    angles = SO3_coordinates(quaternion, 'Q', 'EA323')
-    return torch.tensor(angles, dtype=torch.float32)
+    def forward(self, x):
+        """Input dim is [batch, 3, 3]."""
+        x = self.mlp(x.view(-1, 9))
+        return self.deconv(x[:, :, None, None])[:, 0, :, :]
 
 
 def test(loader, net):
@@ -175,9 +153,8 @@ def train(epoch, train_loader, test_loader, net, optimizer, log):
             print(global_it, train_loss, test_loss)
 
 
-def generate_image(quaternion, transformer_fn, net, path):
+def generate_image(x, net, path):
     """Render image for certain quaternion and write to path."""
-    x = transformer_fn(quaternion)
     reconstruction = net(x.to(device)[None])[0]
     image_data = (reconstruction * 255).byte()
     image_array = image_data.detach().to('cpu').numpy()
@@ -192,15 +169,13 @@ def main():
     log = SummaryWriter(args.log_dir)
 
     if args.mode == 'action':
-        transformer_fn = partial(wigner_transformer, degrees)
         net = ActionNet(degrees).to(device)
     elif args.mode == 'mlp':
-        transformer_fn = angle_transformer
-        net = AngleMLPNet(degrees).to(device)
+        net = MLPNet(degrees).to(device)
     else:
         raise RuntimeError('Mode {} not found'.format(args.mode))
 
-    dataset = ShapeDataset('./shapes', transformer_fn=transformer_fn)
+    dataset = ShapeDataset('./shapes')
     num_train = int(len(dataset) * 0.8)
     split = [num_train, len(dataset)-num_train]
     train_dataset, test_dataset = random_split(dataset, split)
@@ -218,7 +193,8 @@ def main():
     # Generate demo image
     filename = './shapes/assets/chair.obj_0.0336_-0.1523_-0.5616_-0.8126.jpg'
     q = ShapeDataset.filename_to_quaternion(filename)
-    generate_image(q, transformer_fn, net, 'supervised_outputs/'+args.mode+'.jpg')
+    x = torch.tensor(SO3_coordinates(q, 'Q', 'MAT'), dtype=torch.float32)
+    generate_image(x, net, 'supervised_outputs/'+args.mode+'.jpg')
     torch.save(net.state_dict(), 'supervised_outputs/'+args.mode+'.pickle')
 
 
@@ -228,7 +204,6 @@ def parse_args():
                         help='[action, mlp]')
     parser.add_argument('--num_its', type=int, default=10)
     parser.add_argument('--log_dir')
-    parser.add_argument('--save_path')
     return parser.parse_args()
 
 
