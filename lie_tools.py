@@ -29,17 +29,17 @@ def map2LieAlgebra(v):
     # make sure this is a sample from R^3
     assert v.size()[-1] == 3
 
-    R_x = n2p(np.array([[ 0., 0., 0.],
+    R_x = torch.tensor([[ 0., 0., 0.],
                         [ 0., 0.,-1.],
-                        [ 0., 1., 0.]]))
+                        [ 0., 1., 0.]], device=v.device)
 
-    R_y = n2p(np.array([[ 0., 0., 1.],
+    R_y = torch.tensor([[ 0., 0., 1.],
                         [ 0., 0., 0.],
-                        [-1., 0., 0.]]))
+                        [-1., 0., 0.]], device=v.device)
 
-    R_z = n2p(np.array([[ 0.,-1., 0.],
+    R_z = torch.tensor([[ 0.,-1., 0.],
                         [ 1., 0., 0.],
-                        [ 0., 0., 0.]]))
+                        [ 0., 0., 0.]], device=v.device)
 
     R = R_x * v[..., 0, None, None] + \
         R_y * v[..., 1, None, None] + \
@@ -62,9 +62,10 @@ def rodrigues(v):
     # normalize K
     K = map2LieAlgebra(v/theta)
 
-    I = Variable(torch.eye(3))
-    R = I + torch.sin(theta)[...,None]*K + (1. - torch.cos(theta))[...,None]*(K@K)
-    a = torch.sin(theta)[...,None]
+    I = torch.eye(3, device=v.device)
+    R = I + torch.sin(theta)[..., None]*K \
+        + (1. - torch.cos(theta))[..., None]*(K@K)
+    a = torch.sin(theta)[..., None]
     return R
 
 
@@ -244,8 +245,8 @@ def test_wigner_d_matrices():
 
 if __name__ == '__main__':
     test_algebra_maps()
-    test_log_exp(0.1, 1E-5)
-    test_log_exp(10, 2E-4)
+    test_log_exp(0.1, 1E-4)
+    test_log_exp(10, 5E-4)
     test_coordinate_changes()
     test_wigner_d_matrices()
 
