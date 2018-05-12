@@ -164,14 +164,12 @@ def generate_image(x, net, path):
 
 def main():
     args = parse_args()
-    degrees = 3
-
     log = SummaryWriter(args.log_dir)
 
     if args.mode == 'action':
-        net = ActionNet(degrees).to(device)
+        net = ActionNet(args.degrees).to(device)
     elif args.mode == 'mlp':
-        net = MLPNet(degrees).to(device)
+        net = MLPNet(args.degrees).to(device)
     else:
         raise RuntimeError('Mode {} not found'.format(args.mode))
 
@@ -203,6 +201,7 @@ def parse_args():
     parser.add_argument('--mode', required=True,
                         help='[action, mlp]')
     parser.add_argument('--num_its', type=int, default=10)
+    parser.add_argument('--degrees', type=int, default=3)
     parser.add_argument('--log_dir')
     return parser.parse_args()
 
