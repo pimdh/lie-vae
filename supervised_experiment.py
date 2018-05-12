@@ -29,7 +29,8 @@ from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
 from tensorboardX import SummaryWriter
 import argparse
 from utils import MLP, random_split
-from lie_tools import group_matrix_to_eazyz, block_wigner_matrix_multiply
+from lie_tools import group_matrix_to_eazyz, block_wigner_matrix_multiply, \
+    rodrigues
 
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -58,6 +59,37 @@ class ShapeDataset(Dataset):
     def filename_to_quaternion(filename):
         """Remove extension, then retrieve _ separated floats"""
         return [float(x) for x in filename[:-len('.jpg')].split('_')[-4:]]
+
+
+class Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        input_nc = 1
+        ndf = 50
+        nout = 3
+        self.conv = nn.Sequential(
+            # input is (nc) x 64 x 64
+            nn.Conv2d(input_nc, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf) x 32 x 32
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*2) x 16 x 16
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*4) x 8 x 8
+            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*8) x 4 x 4
+            nn.Conv2d(ndf * 8, nout, 4, 1, 0, bias=False),
+        )
+
+    def forward(self, img):
+        x = self.conv(img[:, None, :, :])
+        return rodrigues(x[:, :, 0, 0])
 
 
 class DeconvNet(nn.Sequential):
@@ -120,23 +152,38 @@ class MLPNet(nn.Module):
         return self.deconv(x[:, :, None, None])[:, 0, :, :]
 
 
-def test(loader, net):
+def test(loader, net, encoder=None):
+    net.eval()
+    if encoder:
+        encoder.eval()
     losses = []
-    for it, (x, y) in enumerate(loader):
-        x, y = x.to(device), y.to(device)
-        reconstruction = net(x)
-        loss = nn.MSELoss()(reconstruction, y)
+    for it, (rot_label, img_label) in enumerate(loader):
+        rot_label, img_label = rot_label.to(device), img_label.to(device)
+
+        if encoder:
+            rot = encoder(img_label)
+        else:
+            rot = rot_label
+        reconstruction = net(rot)
+        loss = nn.MSELoss()(reconstruction, img_label)
         losses.append(loss.item())
     return np.mean(losses)
 
 
-def train(epoch, train_loader, test_loader, net, optimizer, log):
+def train(epoch, train_loader, test_loader, net, optimizer, log, encoder=None,
+          report_freq=1250):
     losses = []
-    for it, (x, y) in enumerate(train_loader):
-        x, y = x.to(device), y.to(device)
-        reconstruction = net(x)
+    for it, (rot_label, img_label) in enumerate(train_loader):
+        net.train()
+        rot_label, img_label = rot_label.to(device), img_label.to(device)
+        if encoder:
+            encoder.train()
+            rot = encoder(img_label)
+        else:
+            rot = rot_label
+        reconstruction = net(rot)
 
-        loss = nn.MSELoss()(reconstruction, y)
+        loss = nn.MSELoss()(reconstruction, img_label)
 
         optimizer.zero_grad()
         loss.backward()
@@ -144,11 +191,11 @@ def train(epoch, train_loader, test_loader, net, optimizer, log):
 
         losses.append(loss.item())
 
-        if (it + 1) % 1250 == 0 or it + 1 == len(train_loader):
-            train_loss = np.mean(losses[-1250:])
+        if (it + 1) % report_freq == 0 or it + 1 == len(train_loader):
+            train_loss = np.mean(losses[-report_freq:])
             global_it = epoch * len(train_loader) + it + 1
             log.add_scalar('train_loss', train_loss, global_it)
-            test_loss = test(test_loader, net)
+            test_loss = test(test_loader, net, encoder)
             log.add_scalar('test_loss', test_loss, global_it)
             print(global_it, train_loss, test_loss)
 
@@ -173,6 +220,16 @@ def main():
     else:
         raise RuntimeError('Mode {} not found'.format(args.mode))
 
+    if args.ae:
+        encoder = Encoder().to(device)
+    else:
+        encoder = None
+
+    # Demo image
+    filename = './shapes/assets/chair.obj_0.0336_-0.1523_-0.5616_-0.8126.jpg'
+    q = ShapeDataset.filename_to_quaternion(filename)
+    x_demo = torch.tensor(SO3_coordinates(q, 'Q', 'MAT'), dtype=torch.float32)
+
     dataset = ShapeDataset('./shapes')
     num_train = int(len(dataset) * 0.8)
     split = [num_train, len(dataset)-num_train]
@@ -181,28 +238,35 @@ def main():
                               shuffle=True, num_workers=5)
     test_loader = DataLoader(test_dataset, batch_size=64,
                              shuffle=True, num_workers=5)
-    optimizer = torch.optim.Adam(net.parameters())
+    params = list(net.parameters())
+    if encoder:
+        params = params + list(encoder.parameters())
+    optimizer = torch.optim.Adam(params)
 
     for epoch in range(args.num_its):
-        train(epoch, train_loader, test_loader, net, optimizer, log)
+        train(epoch, train_loader, test_loader, net, optimizer, log, encoder,
+              args.report_freq)
+        if args.save_dir:
+            generate_image(x_demo, net, os.path.join(
+                args.save_dir, '{}_{}.jpg'.format(args.mode, epoch+1)))
+            torch.save(net.state_dict(), os.path.join(
+                args.save_dir, '{}_{}.pickle'.format(args.mode, epoch+1)))
+            torch.save(encoder.state_dict(), os.path.join(
+                args.save_dir, '{}_{}_enc.pickle'.format(args.mode, epoch+1)))
 
     log.close()
 
-    # Generate demo image
-    filename = './shapes/assets/chair.obj_0.0336_-0.1523_-0.5616_-0.8126.jpg'
-    q = ShapeDataset.filename_to_quaternion(filename)
-    x = torch.tensor(SO3_coordinates(q, 'Q', 'MAT'), dtype=torch.float32)
-    generate_image(x, net, 'supervised_outputs/'+args.mode+'.jpg')
-    torch.save(net.state_dict(), 'supervised_outputs/'+args.mode+'.pickle')
-
-
 def parse_args():
     parser = argparse.ArgumentParser('Supervised experiment')
+    parser.add_argument('--ae', type=int, default=0,
+                        help='whether to auto-encode')
     parser.add_argument('--mode', required=True,
                         help='[action, mlp]')
     parser.add_argument('--num_its', type=int, default=10)
+    parser.add_argument('--report_freq', type=int, default=1250)
     parser.add_argument('--degrees', type=int, default=3)
     parser.add_argument('--log_dir')
+    parser.add_argument('--save_dir')
     return parser.parse_args()
 
 
