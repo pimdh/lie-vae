@@ -3,8 +3,14 @@
 # Also produces depth map at the same time.
 #
 # Example:
-# blender --background --python blender_script.py -- --views 100000 assets/chair.obj --output_folder ./shapes --output_size 64x64
-# find assets_chairs -name '*.obj' -print0 | xargs -0 -n1 -P6 -I {} blender --background --python blender_script.py -- --output_size 64x64 --output_folder shapes_chairs --views 1000 {}
+# Single x 100k:
+# blender --background --python blender_script.py -- --views 100000 assets/chair.obj --output_folder ./data/chairs/single --output_size 64x64
+#
+# All x 1000:
+# find assets_chairs -name '*.obj' -print0 | xargs -0 -n1 -P6 -I {} blender --background --python blender_script.py -- --output_size 64x64 --output_folder data/chairs/all --views 1000 {}
+#
+# 10 types x 100k:
+# cat data/chairs/selected_chairs.txt | xargs -n1 -P5 -I {} blender --background --python blender_script.py -- --output_size 64x64 --output_folder data/chairs/ten --views 100000 {}
 #
 # ShapenetCore: http://shapenet.cs.stanford.edu/shapenet/obj-zip/ShapeNetCore.v2.zip
 #
