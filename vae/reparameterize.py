@@ -146,11 +146,10 @@ class SO3reparameterize(nn.Module):
             
         log_p = log_p.permute([0,2,1]) # [n,B,(2k+1)]
         
-        log_vol = ((theta_hat**2 + 1e-5) / \
-                   (2 - 2 * torch.cos(theta_hat) + 1e-5)).log() #[n,B,(2k+1),1]
-        #print (log_vol.max())
-        #print(log_vol.size())
-        log_p = log_p*log_vol.sum(-1)
+#         log_vol = ((theta_hat**2 + 1e-5) / \
+#                    (2 - 2 * torch.cos(theta_hat) + 1e-5)).log() #[n,B,(2k+1),1]
+        
+#         log_p = log_p*log_vol.sum(-1)
         
         log_p = logsumexp(log_p, -1)
        
