@@ -109,18 +109,13 @@ class DeconvNet(nn.Sequential):
 
 class ActionNet(nn.Module):
     """Uses proper group action."""
-    def __init__(self, degrees, in_dims=10, with_mlp=False):
+    def __init__(self, degrees, in_dims=10, deconv_hidden=50):
         super().__init__()
         self.degrees = degrees
         self.in_dims = in_dims
         self.matrix_dims = (degrees + 1) ** 2
         self.item_rep = nn.Parameter(torch.randn((self.matrix_dims, in_dims)))
-        self.deconv = DeconvNet(self.matrix_dims * self.in_dims, 50)
-        if with_mlp:
-            self.mlp = MLP(self.matrix_dims * in_dims,
-                           self.matrix_dims * in_dims, 50, 3)
-        else:
-            self.mlp = None
+        self.deconv = DeconvNet(self.matrix_dims * self.in_dims, deconv_hidden)
 
     def forward(self, matrices):
         """Input dim is [batch, 3, 3]."""
@@ -131,8 +126,6 @@ class ActionNet(nn.Module):
         item = block_wigner_matrix_multiply(angles, item_expanded, self.degrees) \
             .view(-1, self.matrix_dims * self.in_dims)
 
-        if self.mlp:
-            item = self.mlp(item)
         out = self.deconv(item[:, :, None, None])
         return out[:, 0, :, :]
 
@@ -224,7 +217,7 @@ def main():
     log = SummaryWriter(args.log_dir)
 
     if args.mode == 'action':
-        net = ActionNet(args.degrees).to(device)
+        net = ActionNet(args.degrees, deconv_hidden=args.deconv_hidden).to(device)
     elif args.mode == 'mlp':
         net = MLPNet(args.degrees, mode=args.mlp_mode).to(device)
     else:
@@ -277,6 +270,7 @@ def parse_args():
     parser.add_argument('--num_its', type=int, default=10)
     parser.add_argument('--report_freq', type=int, default=1250)
     parser.add_argument('--degrees', type=int, default=3)
+    parser.add_argument('--deconv_hidden', type=int, default=50)
     parser.add_argument('--clip_grads', type=float, default=1E-5)
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
