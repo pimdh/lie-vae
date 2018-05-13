@@ -3,9 +3,8 @@
 # Also produces depth map at the same time.
 #
 # Example:
-# blender --background --python blender_script.py -- --scale 0.9 --views 100000 assets/chair.obj --output_folder ./shapes --output_size 64x64
-# find . -name *.obj -print0 | xargs -0 -n1 -P3 -I {} blender --background --python blender_script.py -- \
-#      --output_size 64x64 --scale 0.8 --output_folder ../shapes_chairs --views 1000 {}
+# blender --background --python blender_script.py -- --views 100000 assets/chair.obj --output_folder ./shapes --output_size 64x64
+# find assets_chairs -name '*.obj' -print0 | xargs -0 -n1 -P6 -I {} blender --background --python blender_script.py -- --output_size 64x64 --output_folder shapes_chairs --views 1000 {}
 #
 # ShapenetCore: http://shapenet.cs.stanford.edu/shapenet/obj-zip/ShapeNetCore.v2.zip
 #
