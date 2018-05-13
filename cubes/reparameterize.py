@@ -126,7 +126,7 @@ class SO3reparameterize(nn.Module):
         self.v = self.reparameterize(x, n)
         
         self.z = self.nsample(n = n)
-        return self.z.view(*self.z.size()[:-2],-1)
+        return self.z
     
     def kl(self):
         log_q_z_x = self.log_posterior()
@@ -143,8 +143,10 @@ class SO3reparameterize(nn.Module):
          
         theta_hat = theta[..., None, :] + angles[:,None] #[n,B,2k+1,1]
         
+        clamp = 1e-3
+        
         #CLAMP FOR NUMERICAL STABILITY
-        theta_hat = torch.clamp(theta_hat, min=1e-3)
+        theta_hat = torch.clamp(theta_hat, min=clamp)
         #theta = torch.clamp(theta, min=1e-3)
         
         x = u[...,None,:] * theta_hat #[n,B,2k+1,3]
@@ -156,7 +158,7 @@ class SO3reparameterize(nn.Module):
             
         log_p = log_p.permute([0,2,1]) # [n,B,(2k+1)]
         log_p.contiguous()
-        cos_theta_hat = torch.clamp(torch.cos(theta_hat), min = -1 + 1e-3, max = 1 - 1e-3)
+        cos_theta_hat = torch.clamp(torch.cos(theta_hat), min = -1 + clamp, max = 1 - clamp)
         
         log_vol =  2 * torch.log(theta_hat / (2 - (2) * cos_theta_hat )) #[n,B,(2k+1),1]
         #print (log_vol.max())
