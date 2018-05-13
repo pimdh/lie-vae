@@ -30,8 +30,7 @@ from tensorboardX import SummaryWriter
 import argparse
 from utils import MLP, random_split
 from lie_tools import group_matrix_to_eazyz, block_wigner_matrix_multiply, \
-    rodrigues
-
+    rodrigues, group_matrix_to_quaternions
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -73,15 +72,15 @@ class Encoder(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 32 x 32
             nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 2),
+            # nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*2) x 16 x 16
             nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 4),
+            # nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*4) x 8 x 8
             nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
+            # nn.BatchNorm2d(ndf * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*8) x 4 x 4
             nn.Conv2d(ndf * 8, nout, 4, 1, 0, bias=False),
@@ -140,15 +139,24 @@ class ActionNet(nn.Module):
 
 class MLPNet(nn.Module):
     """Uses MLP from group matrix."""
-    def __init__(self, degrees, in_dims=10):
+    def __init__(self, degrees, in_dims=10, mode='MAT'):
         super().__init__()
         matrix_dims = (degrees + 1) ** 2
-        self.mlp = MLP(3 * 3, matrix_dims * in_dims, 50, 3)
+        self.mode = mode
+        dims = {'MAT': 9, 'Q': 4, 'EA': 3}[mode]
+        self.mlp = MLP(dims, matrix_dims * in_dims, 50, 3)
         self.deconv = DeconvNet(matrix_dims * in_dims, 50)
 
-    def forward(self, x):
+    def forward(self, r):
         """Input dim is [batch, 3, 3]."""
-        x = self.mlp(x.view(-1, 9))
+        if self.mode == 'MAT':
+            x = r.view(-1, 9)
+        elif self.mode == 'Q':
+            x = group_matrix_to_quaternions(r)
+        else:
+            x = group_matrix_to_eazyz(r)
+
+        x = self.mlp(x)
         return self.deconv(x[:, :, None, None])[:, 0, :, :]
 
 
@@ -171,7 +179,7 @@ def test(loader, net, encoder=None):
 
 
 def train(epoch, train_loader, test_loader, net, optimizer, log, encoder=None,
-          report_freq=1250):
+          report_freq=1250, clip_grads=None):
     losses = []
     for it, (rot_label, img_label) in enumerate(train_loader):
         net.train()
@@ -187,6 +195,8 @@ def train(epoch, train_loader, test_loader, net, optimizer, log, encoder=None,
 
         optimizer.zero_grad()
         loss.backward()
+        if clip_grads:
+            torch.nn.utils.clip_grad_norm_(encoder.parameters(), clip_grads)
         optimizer.step()
 
         losses.append(loss.item())
@@ -216,7 +226,7 @@ def main():
     if args.mode == 'action':
         net = ActionNet(args.degrees).to(device)
     elif args.mode == 'mlp':
-        net = MLPNet(args.degrees).to(device)
+        net = MLPNet(args.degrees, mode=args.mlp_mode).to(device)
     else:
         raise RuntimeError('Mode {} not found'.format(args.mode))
 
@@ -245,7 +255,7 @@ def main():
 
     for epoch in range(args.num_its):
         train(epoch, train_loader, test_loader, net, optimizer, log, encoder,
-              args.report_freq)
+              report_freq=args.report_freq, clip_grads=args.clip_grads)
         if args.save_dir:
             generate_image(x_demo, net, os.path.join(
                 args.save_dir, '{}_{}.jpg'.format(args.mode, epoch+1)))
@@ -256,15 +266,18 @@ def main():
 
     log.close()
 
+
 def parse_args():
     parser = argparse.ArgumentParser('Supervised experiment')
     parser.add_argument('--ae', type=int, default=0,
                         help='whether to auto-encode')
     parser.add_argument('--mode', required=True,
                         help='[action, mlp]')
+    parser.add_argument('--mlp_mode', help='[MAT, Q, EA]', default='MAT')
     parser.add_argument('--num_its', type=int, default=10)
     parser.add_argument('--report_freq', type=int, default=1250)
     parser.add_argument('--degrees', type=int, default=3)
+    parser.add_argument('--clip_grads', type=float, default=1E-5)
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
     return parser.parse_args()
