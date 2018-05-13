@@ -4,4 +4,7 @@ s2cnn/*
 __pycache__/*
 vae/__pycache__/*
 .ipynb_checkpoints/*
-mnist_example/* 
+mnist_example/*
+.idea
+shapes
+!shapes/.gitkeep

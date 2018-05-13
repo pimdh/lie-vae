@@ -21,6 +21,7 @@ class Nreparameterize(nn.Module):
         self.mu_linear = nn.Linear(input_dim, z_dim)
 
     def forward(self, x, n=1):
+        #print(x.max().data.cpu().numpy(),x.min().data.cpu().numpy())
         self.mu = self.mu_linear(x)
         self.sigma = F.softplus(self.sigma_linear(x))
         self.z = self.nsample(n=n)
@@ -28,6 +29,12 @@ class Nreparameterize(nn.Module):
 
     def kl(self):
         return -0.5 * torch.sum(1 + 2 * self.sigma.log() - self.mu.pow(2) - self.sigma ** 2, -1)
+    
+    #def kl(self):
+    #    log_q_z_x = self.log_posterior()
+    #    log_p_z = self.log_prior()
+    #   kl = log_q_z_x - log_p_z
+    #    return kl
     
     def log_posterior(self):
         return self._log_posterior(self.z)
@@ -54,7 +61,7 @@ class N0reparameterize(nn.Module):
 
     def forward(self, x, n=1):
         
-        self.sigma = F.softplus(self.sigma_linear(x))
+        self.sigma = F.softplus(self.sigma_linear(x)) 
         self.z = self.nsample(n=n)
         return self.z
 
@@ -130,31 +137,35 @@ class SO3reparameterize(nn.Module):
     def log_posterior(self):
         
         theta = self.v.norm(p=2,dim=-1, keepdim=True) #[n,B,1]
-    
         u = self.v / theta #[n,B,3]
         angles = Variable(torch.arange(-self.k, self.k+1) * 2 * math.pi) #[2k+1]
         angles = angles.cuda() if self.v.is_cuda else angles
          
         theta_hat = theta[..., None, :] + angles[:,None] #[n,B,2k+1,1]
         
+        #CLAMP FOR NUMERICAL STABILITY
+        theta_hat = torch.clamp(theta_hat, min=1e-3)
+        #theta = torch.clamp(theta, min=1e-3)
+        
         x = u[...,None,:] * theta_hat #[n,B,2k+1,3]
-        log_p = self.reparameterize._log_posterior(x.permute([0,2,1,3])) #[n,(2k+1),B,3] or [n,(2k+1),B]
+        log_p = self.reparameterize._log_posterior(x.permute([0,2,1,3]).contiguous()) #[n,(2k+1),B,3] or [n,(2k+1),B]
         # maybe reduce last dimension
         if len(log_p.size()) == 4:
 
             log_p = log_p.sum(-1) # [n,(2k+1),B]
             
         log_p = log_p.permute([0,2,1]) # [n,B,(2k+1)]
+        log_p.contiguous()
         
-#         log_vol = ((theta_hat**2 + 1e-5) / \
-#                    (2 - 2 * torch.cos(theta_hat) + 1e-5)).log() #[n,B,(2k+1),1]
+        log_vol =  2 * torch.log(theta_hat / (2 - (2) * torch.cos(theta_hat))) #[n,B,(2k+1),1]
+        #print (log_vol.max())
+        #print(log_vol.size())
+        log_p = log_p*log_vol.sum(-1)
         
-#         log_p = log_p*log_vol.sum(-1)
-        
-        log_p = logsumexp(log_p, -1)
+        log_p = logsumexp(log_p,-1) #- (2 - (2) * torch.cos(theta)).log().sum(-1)
        
         return log_p
-        
+      
     def log_prior(self):
         is_cuda = self.v.is_cuda
         prior = t2p(torch.Tensor([1 / (8 * math.pi ** 2)]), cuda=is_cuda)

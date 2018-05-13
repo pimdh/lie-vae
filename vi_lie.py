@@ -10,44 +10,9 @@ from torch.distributions import Normal
 from torch.optim import Adam
 
 from utils import *
+from lie_tools import map2LieVector, map2LieAlgebra, rodrigues, log_map
 
-def map2LieAlgebra(v):
-    """Map a point in R^N to the tangent space at the identity, i.e.
-    to the Lie Algebra
-    Arg:
-        v = vector in R^N, (..., 3) in our case
-    Return:
-        R = v converted to Lie Algebra element, (3,3) in our case"""
 
-    # make sure this is a sample from R^3
-    assert v.size()[-1] == 3
-
-    R_x = n2p(np.array([[ 0., 0., 0.],
-                        [ 0., 0.,-1.],
-                        [ 0., 1., 0.]]))
-
-    R_y = n2p(np.array([[ 0., 0., 1.],
-                        [ 0., 0., 0.],
-                        [-1., 0., 0.]]))
-
-    R_z = n2p(np.array([[ 0.,-1., 0.],
-                        [ 1., 0., 0.],
-                        [ 0., 0., 0.]]))
-
-    R = R_x * v[..., 0, None, None] + \
-        R_y * v[..., 1, None, None] + \
-        R_z * v[..., 2, None, None]
-    return R
-
-def rodrigues(v):
-    theta = v.norm(p=2,dim=-1, keepdim=True)
-    # normalize K
-    K = map2LieAlgebra(v/theta)
-
-    I = Variable(torch.eye(3))
-    R = I + torch.sin(theta)[...,None]*K + (1. - torch.cos(theta))[...,None]*(K@K)
-    a = torch.sin(theta)[...,None]
-    return R
 
 def log_density(v, L, D, k = 10):
     theta = v.norm(p=2,dim=-1, keepdim=True)

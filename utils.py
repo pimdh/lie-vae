@@ -8,6 +8,8 @@ from torch import Tensor as t
 import torch.nn.functional as F
 from torch.distributions import Normal
 from torch.optim import Adam
+from itertools import accumulate
+from torch.utils.data import Dataset
 
 
 def n2p(x, requires_grad = True):
@@ -52,8 +54,10 @@ def deg2coo(x):
     return np.vstack((xs, ys, zs)).T
 
 def randomR():
+    """For proof, see https://math.stackexchange.com/a/138837/243884"""
     q, r = np.linalg.qr(np.random.normal(size=(3, 3)))
     r = np.diag(r)
+    # TODO: What's going on here??
     ret = q @ np.diag(r / np.abs(r))
     return ret * np.linalg.det(ret)
 
@@ -92,3 +96,39 @@ def next_batch(batch_dim, letter='L', size=6):
     rotatedL = np.stack([oL @ rot for oL, rot in zip(originalL, rotations)])
 
     return originalL, rotatedL, rotations
+
+
+# Some code from master branch that allows for random dataset splits
+class Subset(Dataset):
+    def __init__(self, dataset, indices):
+        self.dataset = dataset
+        self.indices = indices
+
+    def __getitem__(self, idx):
+        return self.dataset[self.indices[idx]]
+
+    def __len__(self):
+        return len(self.indices)
+
+
+def random_split(dataset, lengths):
+    assert sum(lengths) == len(dataset)
+    indices = torch.randperm(sum(lengths))
+    return [Subset(dataset, indices[offset - length:offset])
+            for offset, length in zip(accumulate(lengths), lengths)]
+
+
+class MLP(nn.Sequential):
+    """Helper module to create MLPs."""
+    def __init__(self, input_dims, output_dims, hidden_dims,
+                 num_layers=1, activation=nn.ReLU):
+        if num_layers == 0:
+            super().__init__(nn.Linear(input_dims, output_dims))
+        else:
+            super().__init__(
+                nn.Linear(input_dims, hidden_dims),
+                activation(),
+                *[l for _ in range(num_layers-1)
+                  for l in [nn.Linear(hidden_dims, hidden_dims), activation()]],
+                nn.Linear(hidden_dims, output_dims)
+            )
