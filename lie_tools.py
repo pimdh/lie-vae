@@ -127,10 +127,15 @@ def group_matrix_to_quaternions(r):
 
 def quaternions_to_eazyz(q):
     """Map batch of quaternion to Euler angles ZYZ. Output is not mod 2pi."""
+    eps = 1E-6
     return torch.stack([
-        torch.atan2(q[:, 1] * q[:, 2] - q[:, 0] * q[:, 3], q[:, 0] * q[:, 2]+ q[:, 1] * q[:, 3]),
-        torch.acos(torch.clamp(q[:, 3] ** 2 - q[:, 0] ** 2 - q[:, 1] ** 2 + q[:, 2] ** 2, -1.0, 1.0)),
-        torch.atan2(q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2], q[:, 1] * q[:, 3] - q[:, 0] * q[:, 2])
+        torch.atan2(q[:, 1] * q[:, 2] - q[:, 0] * q[:, 3],
+                    q[:, 0] * q[:, 2] + q[:, 1] * q[:, 3]),
+        torch.acos(torch.clamp(q[:, 3] ** 2 - q[:, 0] ** 2
+                               - q[:, 1] ** 2 + q[:, 2] ** 2,
+                               -1.0+eps, 1.0-eps)),
+        torch.atan2(q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2],
+                    q[:, 1] * q[:, 3] - q[:, 0] * q[:, 2])
     ], 1)
 
 
