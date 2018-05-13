@@ -86,12 +86,13 @@ def group_matrix_to_quaternions(r):
     n = r.size(0)
 
     diags = [r[:, 0, 0], r[:, 1, 1], r[:, 2, 2]]
-    denom = torch.stack([
-        0.5 * torch.sqrt(torch.abs(1 + diags[0] - diags[1] - diags[2])),
-        0.5 * torch.sqrt(torch.abs(1 - diags[0] + diags[1] - diags[2])),
-        0.5 * torch.sqrt(torch.abs(1 - diags[0] - diags[1] + diags[2])),
-        0.5 * torch.sqrt(torch.abs(1 + diags[0] + diags[1] + diags[2]))
+    denom_pre = torch.stack([
+        1 + diags[0] - diags[1] - diags[2],
+        1 - diags[0] + diags[1] - diags[2],
+        1 - diags[0] - diags[1] + diags[2],
+        1 + diags[0] + diags[1] + diags[2]
     ], 1)
+    denom = 0.5 * torch.sqrt(1E-6 + torch.abs(denom_pre))
 
     case0 = torch.stack([
         denom[:, 0],
@@ -120,16 +121,22 @@ def group_matrix_to_quaternions(r):
 
     cases = torch.stack([case0, case1, case2, case3], 1)
 
-    return cases[torch.arange(n, dtype=torch.long), torch.argmax(denom, 1)]
+    return cases[torch.arange(n, dtype=torch.long),
+                 torch.argmax(denom.detach(), 1)]
 
 
 def quaternions_to_eazyz(q):
-    """Map batch of quaternion to Euler angles ZYZ."""
+    """Map batch of quaternion to Euler angles ZYZ. Output is not mod 2pi."""
+    eps = 1E-6
     return torch.stack([
-        torch.atan2(q[:, 1] * q[:, 2] - q[:, 0] * q[:, 3], q[:, 0] * q[:, 2]+ q[:, 1] * q[:, 3]),
-        torch.acos(torch.clamp(q[:, 3] ** 2 - q[:, 0] ** 2 - q[:, 1] ** 2 + q[:, 2] ** 2, -1.0, 1.0)),
-        torch.atan2(q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2], q[:, 1] * q[:, 3] - q[:, 0] * q[:, 2])
-    ], 1).remainder(2 * np.pi)
+        torch.atan2(q[:, 1] * q[:, 2] - q[:, 0] * q[:, 3],
+                    q[:, 0] * q[:, 2] + q[:, 1] * q[:, 3]),
+        torch.acos(torch.clamp(q[:, 3] ** 2 - q[:, 0] ** 2
+                               - q[:, 1] ** 2 + q[:, 2] ** 2,
+                               -1.0+eps, 1.0-eps)),
+        torch.atan2(q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2],
+                    q[:, 1] * q[:, 3] - q[:, 0] * q[:, 2])
+    ], 1)
 
 
 def group_matrix_to_eazyz(r):
@@ -224,7 +231,7 @@ def test_coordinate_changes():
     np.testing.assert_allclose(q, q_reference, rtol=1E-5, atol=1E-5)
 
     ea_reference = SO3_coordinates(q.numpy().astype(np.float64), 'Q', 'EA323')
-    ea = quaternions_to_eazyz(q)
+    ea = quaternions_to_eazyz(q).remainder(2*np.pi)
     np.testing.assert_allclose(ea, ea_reference, rtol=1E-5, atol=1E-5)
 
 
