@@ -72,8 +72,7 @@ class ActionNet(nn.Module):
         item = block_wigner_matrix_multiply(angles, harmonics, self.degrees) \
             .view(-1, self.matrix_dims * self.data_dims)
 
-        out = self.deconv(item[:, :, None, None])
-        return out[:, 0, :, :]
+        return self.deconv(item)
 
 
 class MLPNet(nn.Module):
@@ -108,8 +107,7 @@ class MLPNet(nn.Module):
         if id_data is not None:
             x = torch.cat((x, id_data.view(n, -1)), 1)
 
-        x = self.mlp(x)
-        return self.deconv(x[:, :, None, None])[:, 0, :, :]
+        return self.deconv(self.mlp(x))
 
 
 def encode(encoder, single_id, item_label, rot_label, img_label):

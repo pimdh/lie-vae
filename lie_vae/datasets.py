@@ -23,6 +23,7 @@ class ShapeDataset(Dataset):
         filename = self.files[idx]
         image = Image.open(filename)
         image_tensor = torch.tensor(np.array(image), dtype=torch.float32) / 255
+        image_tensor = image_tensor.unsqueeze(0)  # Add color channel
         quaternion = self.filename_to_quaternion(filename)
         image_tensor = image_tensor.mean(-1)
 

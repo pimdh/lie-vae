@@ -7,12 +7,26 @@ from .utils import View, Flatten
 class ChairsEncoder(nn.Module):
     def __init__(self, id_dims=0, hidden_dims=50):
         super().__init__()
-        input_nc = 1
         self.id_dims = id_dims
-        nout = 3 + id_dims
-        self.conv = nn.Sequential(
-            # input is (nc) x 64 x 64
-            nn.Conv2d(input_nc, hidden_dims, 4, 2, 1),
+        out_dims = 3 + id_dims
+        self.conv = ChairsConvNet(out_dims, hidden_dims)
+
+    def forward(self, img):
+        x = self.conv(img)
+        algebra = x[:, :3]
+        if self.id_dims:
+            id_data = x[:, 3:]
+        else:
+            id_data = None
+        return rodrigues(algebra), id_data
+
+
+class ChairsConvNet(nn.Sequential):
+    def __init__(self, out_dims, hidden_dims=50):
+        input_dims = 1
+        super().__init__(
+            # input is (input_dims) x 64 x 64
+            nn.Conv2d(input_dims, hidden_dims, 4, 2, 1),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (hidden_dims) x 32 x 32
             nn.Conv2d(hidden_dims, hidden_dims * 2, 4, 2, 1),
@@ -27,23 +41,17 @@ class ChairsEncoder(nn.Module):
             # nn.BatchNorm2d(hidden_dims * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (hidden_dims*8) x 4 x 4
-            nn.Conv2d(hidden_dims * 8, nout, 4, 1, 0),
+            nn.Conv2d(hidden_dims * 8, out_dims, 4, 1, 0),
+            # state size. out_dims x 1 x 1
+            Flatten()
         )
-
-    def forward(self, img):
-        x = self.conv(img[:, None, :, :])[:, :, 0, 0]
-        algebra = x[:, :3]
-        if self.id_dims:
-            id_data = x[:, 3:]
-        else:
-            id_data = None
-        return rodrigues(algebra), id_data
 
 
 class ChairsDeconvNet(nn.Sequential):
     """1x1 to 64x64 deconvolutional stack."""
     def __init__(self, in_dims, hidden_dims):
         super().__init__(
+            View(-1, in_dims, 1, 1),
             nn.ConvTranspose2d(in_dims, hidden_dims, 4, 1, 0),
             nn.ReLU(),
             nn.ConvTranspose2d(hidden_dims, hidden_dims, 4, 2, 1),
