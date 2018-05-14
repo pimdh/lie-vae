@@ -12,9 +12,20 @@ from itertools import accumulate
 from torch.utils.data import Dataset
 
 
-def n2p(x, requires_grad = True):
+def n2p(x, requires_grad=True, cuda=False):
     """converts numpy tensor to pytorch variable"""
-    return Variable(t(x), requires_grad)
+    x_pt = Variable(torch.Tensor(x), requires_grad)
+    if cuda:
+        x_pt = x_pt.cuda()
+
+    return x_pt
+
+def t2p(x, requires_grad=True, cuda=False):
+    x_pt = Variable(x)
+    if cuda:
+        x_pt = x_pt.cuda()
+    return x_pt
+
 
 def t2c(x):
     return x.cuda()

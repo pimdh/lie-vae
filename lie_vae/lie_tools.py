@@ -1,12 +1,12 @@
 import numpy as np
 import torch
-from torch.autograd import Variable
-from utils import n2p, randomR
 from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
 from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense \
     import Jd as Jd_np
 from lie_learn.representations.SO3.wigner_d import \
     wigner_D_matrix as reference_wigner_D_matrix
+
+from .utils import randomR
 
 device_strings = ['cpu']
 for i in range(torch.cuda.device_count()):
@@ -15,7 +15,6 @@ for i in range(torch.cuda.device_count()):
 # Copy to all devices
 Jd = {d: [torch.tensor(J, dtype=torch.float32, device=d) for J in Jd_np]
       for d in device_strings}
-
 
 
 def map2LieAlgebra(v):

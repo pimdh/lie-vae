@@ -1,17 +1,5 @@
-import numpy as np
-import math
-
-import torch
-from torch import nn
-from torch.autograd import Variable
-from torch import Tensor as t
-import torch.nn.functional as F
-from torch.distributions import Normal
-from torch.optim import Adam
-
-from utils import *
-from lie_tools import map2LieVector, map2LieAlgebra, rodrigues, log_map
-
+from lie_vae.utils import *
+from lie_vae.lie_tools import rodrigues
 
 
 def log_density(v, L, D, k = 10):

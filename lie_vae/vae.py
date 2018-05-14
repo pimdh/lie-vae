@@ -1,16 +1,11 @@
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
 import numpy as np
+from .utils import logsumexp
 
-from pytorch_util import MLP
-from reparameterize import Nreparameterize
-from reparameterize import SO3reparameterize
-from pytorch_util import logsumexp
 
 class VAE(nn.Module):
+    """General VAE class."""
     def __init__(self):
         super(VAE, self).__init__()
         self.encoder = None

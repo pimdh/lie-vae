@@ -1,4 +1,3 @@
-
 import math
 import numpy as np
 
@@ -8,7 +7,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.distributions import Normal
 
-from pytorch_util import logsumexp, n2p, t2p
+from .utils import logsumexp, n2p, t2p
+from .lie_tools import rodrigues, map2LieAlgebra
 
 class Nreparameterize(nn.Module):
 
@@ -81,6 +81,7 @@ class N0reparameterize(nn.Module):
         eps = Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).sample_n(n)
         return eps * self.sigma
 
+
 class SO3reparameterize(nn.Module):
     def __init__(self, reparameterize, k=10):
         super(SO3reparameterize, self).__init__()
@@ -91,8 +92,7 @@ class SO3reparameterize(nn.Module):
         self.k = k
         
         self.mu_linear = nn.Linear(self.input_dim, 3)
-       
-          
+
     @staticmethod
     def _lieAlgebra(v):
         """Map a point in R^N to the tangent space at the identity, i.e. 
@@ -101,26 +101,12 @@ class SO3reparameterize(nn.Module):
             v = vector in R^N, (..., 3) in our case
         Return:
             R = v converted to Lie Algebra element, (3,3) in our case"""
-        is_cuda = v.is_cuda
-        R_x = n2p(np.array([[ 0., 0., 0.],[ 0., 0.,-1.],[ 0., 1., 0.]]), cuda = is_cuda)
-        R_y = n2p(np.array([[ 0., 0., 1.],[ 0., 0., 0.],[-1., 0., 0.]]), cuda = is_cuda)
-        R_z = n2p(np.array([[ 0.,-1., 0.],[ 1., 0., 0.],[ 0., 0., 0.]]), cuda = is_cuda)
+        return map2LieAlgebra(v)
 
-        R = R_x * v[..., 0, None, None] + R_y * v[..., 1, None, None] + \
-            R_z * v[..., 2, None, None]
-        return R
-    
     @staticmethod
     def _expmap_rodrigues(v):
-        is_cuda = v.is_cuda
-        theta = v.norm(p=2,dim=-1, keepdim=True)
-        K = SO3reparameterize._lieAlgebra(v/theta)
-        I = Variable(torch.eye(3))
-        I = I.cuda() if is_cuda else I
-        R = I + torch.sin(theta)[...,None]*K + \
-                (1. - torch.cos(theta))[...,None]*(K@K)
-        return R
-    
+        return rodrigues(v)
+
     def forward(self, x, n=1):
         self.mu = self.mu_linear(x)
         self.v = self.reparameterize(x, n)
