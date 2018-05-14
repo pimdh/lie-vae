@@ -21,68 +21,19 @@ Uses https://github.com/AMLab-Amsterdam/lie_learn
 import torch
 import torch.nn as nn
 import numpy as np
-from glob import glob
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import os.path
 from pprint import pprint
-import re
 from PIL import Image
-from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
 from tensorboardX import SummaryWriter
 import argparse
+
+from lie_vae.datasets import ShapeDataset, SelectedDataset
 from lie_vae.utils import MLP, random_split
 from lie_vae.lie_tools import group_matrix_to_eazyz, block_wigner_matrix_multiply, \
     rodrigues, group_matrix_to_quaternions
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-
-class ShapeDataset(Dataset):
-    def __init__(self, directory):
-        self.directory = directory
-        self.files = glob(os.path.join(directory, '**/*.jpg'), recursive=True)
-
-    def __len__(self):
-        return len(self.files)
-
-    def __getitem__(self, idx):
-        filename = self.files[idx]
-        image = Image.open(filename)
-        image_tensor = torch.tensor(np.array(image), dtype=torch.float32) / 255
-        quaternion = self.filename_to_quaternion(filename)
-        image_tensor = image_tensor.mean(-1)
-
-        group_el = torch.tensor(SO3_coordinates(quaternion, 'Q', 'MAT'),
-                                dtype=torch.float32)
-
-        match = re.search(r'([A-z0-9]+)\.obj', filename)
-
-        assert match is not None, 'Could not find object id from filename'
-
-        name = match.group(1)
-
-        return name, group_el, image_tensor
-
-    @staticmethod
-    def filename_to_quaternion(filename):
-        """Remove extension, then retrieve _ separated floats"""
-        matches = re.findall(r'-?[01]\.[0-9]{4}', filename)
-        assert len(matches) == 4, 'No quaternion found in '+filename
-        return [float(x) for x in matches]
-
-
-class SelectedDataset(ShapeDataset):
-    """Selected N chair types by hand. Name is mapped it ID integer."""
-
-    def __init__(self):
-        super().__init__('data/chairs/ten')
-        with open('data/chairs/selected_chairs.txt', 'r') as f:
-            self.name = re.findall('([A-z0-9]+)\.obj', f.read())
-        self.map = {n: i for i, n in enumerate(self.name)}
-
-    def __getitem__(self, idx):
-        name, group_el, image_tensor = super().__getitem__(idx)
-        return self.map[name], group_el, image_tensor
 
 
 class Encoder(nn.Module):

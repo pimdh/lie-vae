@@ -1,5 +1,6 @@
 .ipynb_checkpoints/*
 data/*
+!data/cubes
 s2cnn/*
 __pycache__/*
 vae/__pycache__/*
