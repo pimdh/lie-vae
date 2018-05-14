@@ -24,6 +24,7 @@ import numpy as np
 from glob import glob
 from torch.utils.data import Dataset, DataLoader
 import os.path
+from pprint import pprint
 import re
 from PIL import Image
 from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
@@ -138,7 +139,8 @@ class DeconvNet(nn.Sequential):
 
 class ActionNet(nn.Module):
     """Uses proper group action."""
-    def __init__(self, degrees, id_dims=10, data_dims=10, deconv_hidden=50, single_id=True):
+    def __init__(self, degrees, id_dims=10, data_dims=10, deconv_hidden=50, single_id=True,
+                 harmonics_encoder_layers=3):
         super().__init__()
         self.degrees = degrees
         self.data_dims = data_dims
@@ -149,7 +151,7 @@ class ActionNet(nn.Module):
         else:
             self.item_rep = None
             self.harmonics_encoder = MLP(
-                id_dims, self.matrix_dims * self.data_dims, 3, 50)
+                id_dims, self.matrix_dims * self.data_dims, harmonics_encoder_layers, 50)
 
         self.deconv = DeconvNet(self.matrix_dims * self.data_dims, deconv_hidden)
 
@@ -281,12 +283,14 @@ def generate_image(x, net, path):
 
 def main():
     args = parse_args()
+    pprint(vars(args))
     log = SummaryWriter(args.log_dir)
 
     if args.mode == 'action':
         net = ActionNet(args.degrees,
                         id_dims=args.id_dims,
                         deconv_hidden=args.deconv_hidden,
+                        harmonics_encoder_layers=args.harmonics_encoder_layers,
                         single_id=args.single_id).to(device)
     elif args.mode == 'mlp':
         net = MLPNet(args.degrees,
@@ -362,6 +366,7 @@ def parse_args():
     parser.add_argument('--id_dims', type=int, default=10)
     parser.add_argument('--clip_grads', type=float, default=1E-5)
     parser.add_argument('--single_id', type=int, default=1)
+    parser.add_argument('--harmonics_encoder_layers', type=int, default=3)
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
     parser.add_argument('--continue_epoch', type=int, default=0)
