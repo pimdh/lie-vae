@@ -341,6 +341,8 @@ def main():
               single_id=args.single_id,
               report_freq=args.report_freq, clip_grads=args.clip_grads)
         if args.save_dir:
+            if not os.path.exists(args.save_dir):
+                os.makedirs(args.save_dir)
             torch.save(net.state_dict(), os.path.join(
                 args.save_dir, 'dec.pickle'))
             if encoder is not None:
