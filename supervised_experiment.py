@@ -303,6 +303,13 @@ def main():
     else:
         encoder = None
 
+    if args.continue_epoch > 0:
+        net.load_state_dict(torch.load(os.path.join(
+            args.save_dir, '{}_{}.pickle'.format(args.mode, args.continue_epoch))))
+        if encoder is not None:
+            encoder.load_state_dict(torch.load(os.path.join(
+                args.save_dir, '{}_{}_enc.pickle'.format(args.mode, args.continue_epoch))))
+
     # Demo image
     # filename = './data/chairs/single/assets/chair.obj_0.0336_-0.1523_-0.5616_-0.8126.jpg'
     # q = ShapeDataset.filename_to_quaternion(filename)
@@ -325,7 +332,7 @@ def main():
         params = params + list(encoder.parameters())
     optimizer = torch.optim.Adam(params)
 
-    for epoch in range(args.epochs):
+    for epoch in range(args.continue_epoch, args.epochs):
         train(epoch, train_loader, test_loader, net, optimizer, log, encoder,
               single_id=args.single_id,
               report_freq=args.report_freq, clip_grads=args.clip_grads)
@@ -357,6 +364,7 @@ def parse_args():
     parser.add_argument('--single_id', type=int, default=1)
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
+    parser.add_argument('--continue_epoch', type=int, default=0)
     return parser.parse_args()
 
 
