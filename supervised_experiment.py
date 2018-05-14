@@ -151,7 +151,7 @@ class ActionNet(nn.Module):
         else:
             self.item_rep = None
             self.harmonics_encoder = MLP(
-                id_dims, self.matrix_dims * self.data_dims, harmonics_encoder_layers, 50)
+                id_dims, self.matrix_dims * self.data_dims, 50, harmonics_encoder_layers)
 
         self.deconv = DeconvNet(self.matrix_dims * self.data_dims, deconv_hidden)
 
