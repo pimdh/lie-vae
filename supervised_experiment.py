@@ -30,8 +30,8 @@ from PIL import Image
 from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
 from tensorboardX import SummaryWriter
 import argparse
-from utils import MLP, random_split
-from lie_tools import group_matrix_to_eazyz, block_wigner_matrix_multiply, \
+from lie_vae.utils import MLP, random_split
+from lie_vae.lie_tools import group_matrix_to_eazyz, block_wigner_matrix_multiply, \
     rodrigues, group_matrix_to_quaternions
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
