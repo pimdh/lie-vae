@@ -139,8 +139,8 @@ class DeconvNet(nn.Sequential):
 
 class ActionNet(nn.Module):
     """Uses proper group action."""
-    def __init__(self, degrees, id_dims=10, data_dims=10, deconv_hidden=50, single_id=True,
-                 harmonics_encoder_layers=3):
+    def __init__(self, degrees, deconv, id_dims=10, data_dims=10,
+                 single_id=True, harmonics_encoder_layers=3):
         super().__init__()
         self.degrees = degrees
         self.data_dims = data_dims
@@ -153,7 +153,7 @@ class ActionNet(nn.Module):
             self.harmonics_encoder = MLP(
                 id_dims, self.matrix_dims * self.data_dims, 50, harmonics_encoder_layers)
 
-        self.deconv = DeconvNet(self.matrix_dims * self.data_dims, deconv_hidden)
+        self.deconv = deconv
 
     def forward(self, matrices, id_data=None):
         """Input dim is [batch, 3, 3]."""
@@ -178,7 +178,7 @@ class ActionNet(nn.Module):
 
 class MLPNet(nn.Module):
     """Uses MLP from group matrix."""
-    def __init__(self, degrees, data_dims=10, mode='MAT', deconv_hidden=50,
+    def __init__(self, degrees, deconv, data_dims=10, mode='MAT',
                  id_dims=10, single_id=True):
         super().__init__()
         matrix_dims = (degrees + 1) ** 2
@@ -189,7 +189,7 @@ class MLPNet(nn.Module):
             dims += id_dims
 
         self.mlp = MLP(dims, matrix_dims * data_dims, 50, 3)
-        self.deconv = DeconvNet(matrix_dims * data_dims, deconv_hidden)
+        self.deconv = deconv
         self.single_id = single_id
 
     def forward(self, r, id_data=None):
@@ -286,16 +286,20 @@ def main():
     pprint(vars(args))
     log = SummaryWriter(args.log_dir)
 
+    matrix_dims = (args.degrees + 1) ** 2
+    deconv = DeconvNet(matrix_dims * args.data_dims, args.deconv_hidden)
     if args.mode == 'action':
         net = ActionNet(args.degrees,
+                        deconv=deconv,
                         id_dims=args.id_dims,
-                        deconv_hidden=args.deconv_hidden,
+                        data_dims=args.data_dims,
                         harmonics_encoder_layers=args.harmonics_encoder_layers,
                         single_id=args.single_id).to(device)
     elif args.mode == 'mlp':
         net = MLPNet(args.degrees,
+                     deconv=deconv,
                      id_dims=args.id_dims,
-                     deconv_hidden=args.deconv_hidden,
+                     data_dims=args.data_dims,
                      mode=args.mlp_mode,
                      single_id=args.single_id).to(device)
     else:
@@ -365,7 +369,11 @@ def parse_args():
     parser.add_argument('--report_freq', type=int, default=1250)
     parser.add_argument('--degrees', type=int, default=3)
     parser.add_argument('--deconv_hidden', type=int, default=50)
-    parser.add_argument('--id_dims', type=int, default=10)
+    parser.add_argument('--id_dims', type=int, default=10,
+                        help='The dims of the content latent code')
+    parser.add_argument('--data_dims', type=int, default=10,
+                        help='The dims of the virtual signal on the Sphere, '
+                             'i.e. the number of copies of the representation.')
     parser.add_argument('--clip_grads', type=float, default=1E-5)
     parser.add_argument('--single_id', type=int, default=1)
     parser.add_argument('--harmonics_encoder_layers', type=int, default=3)
