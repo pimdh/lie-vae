@@ -29,63 +29,12 @@ from tensorboardX import SummaryWriter
 import argparse
 
 from lie_vae.datasets import ShapeDataset, SelectedDataset
+from lie_vae.nets import ChairsEncoder, ChairsDeconvNet
 from lie_vae.utils import MLP, random_split
 from lie_vae.lie_tools import group_matrix_to_eazyz, block_wigner_matrix_multiply, \
-    rodrigues, group_matrix_to_quaternions
+    group_matrix_to_quaternions
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-
-class Encoder(nn.Module):
-    def __init__(self, id_dims=0, hidden_dims=50):
-        super().__init__()
-        input_nc = 1
-        self.id_dims = id_dims
-        nout = 3 + id_dims
-        self.conv = nn.Sequential(
-            # input is (nc) x 64 x 64
-            nn.Conv2d(input_nc, hidden_dims, 4, 2, 1),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (hidden_dims) x 32 x 32
-            nn.Conv2d(hidden_dims, hidden_dims * 2, 4, 2, 1),
-            # nn.BatchNorm2d(hidden_dims * 2),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (hidden_dims*2) x 16 x 16
-            nn.Conv2d(hidden_dims * 2, hidden_dims * 4, 4, 2, 1),
-            # nn.BatchNorm2d(hidden_dims * 4),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (hidden_dims*4) x 8 x 8
-            nn.Conv2d(hidden_dims * 4, hidden_dims * 8, 4, 2, 1),
-            # nn.BatchNorm2d(hidden_dims * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (hidden_dims*8) x 4 x 4
-            nn.Conv2d(hidden_dims * 8, nout, 4, 1, 0),
-        )
-
-    def forward(self, img):
-        x = self.conv(img[:, None, :, :])[:, :, 0, 0]
-        algebra = x[:, :3]
-        if self.id_dims:
-            id_data = x[:, 3:]
-        else:
-            id_data = None
-        return rodrigues(algebra), id_data
-
-
-class DeconvNet(nn.Sequential):
-    """1x1 to 64x64 deconvolutional stack."""
-    def __init__(self, in_dims, hidden_dims):
-        super().__init__(
-            nn.ConvTranspose2d(in_dims, hidden_dims, 4, 1, 0),
-            nn.ReLU(),
-            nn.ConvTranspose2d(hidden_dims, hidden_dims, 4, 2, 1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(hidden_dims, hidden_dims, 4, 2, 1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(hidden_dims, hidden_dims, 4, 2, 1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(hidden_dims, 1, 4, 2, 1),
-        )
 
 
 class ActionNet(nn.Module):
@@ -238,7 +187,7 @@ def main():
     log = SummaryWriter(args.log_dir)
 
     matrix_dims = (args.degrees + 1) ** 2
-    deconv = DeconvNet(matrix_dims * args.data_dims, args.deconv_hidden)
+    deconv = ChairsDeconvNet(matrix_dims * args.data_dims, args.deconv_hidden)
     if args.mode == 'action':
         net = ActionNet(args.degrees,
                         deconv=deconv,
@@ -258,7 +207,7 @@ def main():
 
     if args.ae:
         id_dims = args.id_dims if not args.single_id else 0
-        encoder = Encoder(id_dims).to(device)
+        encoder = ChairsEncoder(id_dims).to(device)
     else:
         encoder = None
 
