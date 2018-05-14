@@ -113,7 +113,12 @@ class Subset(Dataset):
 
 def random_split(dataset, lengths):
     assert sum(lengths) == len(dataset)
-    indices = torch.randperm(sum(lengths))
+    seed = np.random.get_state()
+    np.random.seed(0)
+    indices = torch.tensor(np.random.permutation(sum(lengths)),
+                           dtype=torch.long)
+    np.random.set_state(seed)
+
     return [Subset(dataset, indices[offset - length:offset])
             for offset, length in zip(accumulate(lengths), lengths)]
 

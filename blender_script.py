@@ -3,14 +3,21 @@
 # Also produces depth map at the same time.
 #
 # Example:
-# blender --background --python blender_script.py -- --scale 0.9 --views 100000 assets/chair.obj \
-#     --output_folder ./shapes --output_size 64x64
+# Single x 100k:
+# blender --background --python blender_script.py -- --views 100000 assets/chair.obj --output_folder ./data/chairs/single --output_size 64x64
+#
+# All x 1000:
+# find assets_chairs -name '*.obj' -print0 | xargs -0 -n1 -P6 -I {} blender --background --python blender_script.py -- --output_size 64x64 --output_folder data/chairs/all --views 1000 {}
+#
+# 10 types x 100k:
+# cat data/chairs/selected_chairs.txt | xargs -n1 -P5 -I {} blender --background --python blender_script.py -- --output_size 64x64 --output_folder data/chairs/ten --views 100000 {}
 #
 # ShapenetCore: http://shapenet.cs.stanford.edu/shapenet/obj-zip/ShapeNetCore.v2.zip
 #
 # Gives Quaternion rotation angles. Convert to other stuff with module pyquaternion.
 
 import argparse, sys, os
+import numpy as np
 
 parser = argparse.ArgumentParser(description='Renders given obj file by rotation a camera around it.')
 parser.add_argument('--views', type=int, default=30,
@@ -64,13 +71,12 @@ bpy.data.objects['Cube'].select = True
 bpy.ops.object.delete()
 
 bpy.ops.import_scene.obj(filepath=args.obj)
+
 for object in bpy.context.scene.objects:
     if object.name in ['Camera', 'Lamp']:
         continue
     bpy.context.scene.objects.active = object
-    if args.scale != 1:
-        bpy.ops.transform.resize(value=(args.scale,args.scale,args.scale))
-        bpy.ops.object.transform_apply(scale=True)
+
     if args.remove_doubles:
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.remove_doubles()
@@ -79,6 +85,44 @@ for object in bpy.context.scene.objects:
         bpy.ops.object.modifier_add(type='EDGE_SPLIT')
         bpy.context.object.modifiers["EdgeSplit"].split_angle = 1.32645
         bpy.ops.object.modifier_apply(apply_as='DATA', modifier="EdgeSplit")
+
+boxes = []
+dims = []
+for object in bpy.context.scene.objects:
+    if object.name in ['Camera', 'Lamp']:
+        continue
+    bpy.context.scene.objects.active = object
+
+    box = np.array(object.bound_box)
+    boxes.append(box)
+    dims.append(np.array(object.dimensions))
+
+
+dims = np.stack(dims, 0)
+boxes = np.concatenate(boxes, 0)
+# print(boxes)
+sides = (boxes.max(axis=0) - boxes.min(axis=0))
+# print(dims)
+# print("Max dims ", dims.max())
+print("Sides ", sides)
+
+# d = np.linalg.norm(box, axis=1).max()
+# print("Size ", d)
+
+scale = 0.757301986217 / sides.max() * .7
+print("Scale ", scale)
+# scale = 0.8
+
+
+for object in bpy.context.scene.objects:
+    if object.name in ['Camera', 'Lamp']:
+        continue
+    bpy.context.scene.objects.active = object
+
+    bpy.context.scene.objects.active.scale = (scale, scale, scale)
+    #
+    # bpy.ops.transform.resize(value=(scale,scale,scale))
+    # bpy.ops.object.transform_apply(scale=True)
 
 # Make light just directional, disable shadows.
 lamp = bpy.data.lamps['Lamp']
@@ -92,7 +136,7 @@ bpy.ops.object.lamp_add(type='SUN')
 lamp2 = bpy.data.lamps['Sun']
 lamp2.shadow_method = 'NOSHADOW'
 lamp2.use_specular = False
-lamp2.energy = 0.015
+lamp2.energy = 0.5
 bpy.data.objects['Sun'].rotation_euler = bpy.data.objects['Lamp'].rotation_euler
 bpy.data.objects['Sun'].rotation_euler[0] += 180
 
@@ -128,8 +172,8 @@ cam_constraint.target = b_empty
 
 fp = os.path.join(args.output_folder, args.obj)
 scene.render.image_settings.file_format = 'JPEG'  # set output format to .png
+scene.render.image_settings.quality = 98  # set output format to .png
 
-import numpy as np
 # Uniform quaternion sampling
 # From http://planning.cs.uiuc.edu/node198.html
 u1, u2, u3 = np.random.uniform(0., 1., size=(3, args.views))
@@ -152,5 +196,5 @@ for i in range(num_views):
     b_empty.rotation_quaternion = tuple(float(x) for x in quaternion)
 
     scene.render.filepath = fp + \
-        '_{:.4f}_{:.4f}_{:.4f}_{:.4f}'.format(*quaternion)
+        '/{:.4f}_{:.4f}_{:.4f}_{:.4f}'.format(*quaternion)
     bpy.ops.render.render(write_still=True)  # render still
