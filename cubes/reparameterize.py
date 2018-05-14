@@ -143,7 +143,7 @@ class SO3reparameterize(nn.Module):
          
         theta_hat = theta[..., None, :] + angles[:,None] #[n,B,2k+1,1]
         
-        clamp = 1e-3
+        clamp = 1e-5
         
         #CLAMP FOR NUMERICAL STABILITY
         theta_hat = torch.clamp(theta_hat, min=clamp)
