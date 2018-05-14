@@ -309,10 +309,10 @@ def main():
 
     if args.continue_epoch > 0:
         net.load_state_dict(torch.load(os.path.join(
-            args.save_dir, '{}_{}.pickle'.format(args.mode, args.continue_epoch))))
+            args.save_dir, 'dec.pickle')))
         if encoder is not None:
             encoder.load_state_dict(torch.load(os.path.join(
-                args.save_dir, '{}_{}_enc.pickle'.format(args.mode, args.continue_epoch))))
+                args.save_dir, 'enc.pickle')))
 
     # Demo image
     # filename = './data/chairs/single/assets/chair.obj_0.0336_-0.1523_-0.5616_-0.8126.jpg'
@@ -342,10 +342,10 @@ def main():
               report_freq=args.report_freq, clip_grads=args.clip_grads)
         if args.save_dir:
             torch.save(net.state_dict(), os.path.join(
-                args.save_dir, '{}_{}.pickle'.format(args.mode, epoch+1)))
+                args.save_dir, 'dec.pickle'))
             if encoder is not None:
                 torch.save(encoder.state_dict(), os.path.join(
-                    args.save_dir, '{}_{}_enc.pickle'.format(args.mode, epoch+1)))
+                    args.save_dir, 'enc.pickle'))
             # generate_image(x_demo, net, os.path.join(
             #     args.save_dir, '{}_{}.jpg'.format(args.mode, epoch+1)))
 
