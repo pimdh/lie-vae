@@ -11,11 +11,15 @@ class VAE(nn.Module):
         self.encoder = None
         self.decoder = None
         self.reparameterize = []
-        self.r_callback = []
+        self.r_callback = None
 
     def encode(self, x, n=1):
         h = self.encoder(x)
-        z = [r(f(h), n) for r, f in zip(self.reparameterize, self.r_callback)]
+
+        if self.r_callback is not None:
+            z = [r(f(h), n) for r, f in zip(self.reparameterize, self.r_callback)]
+        else:
+            z = [r(h, n) for r in self.reparameterize]
 
         return z
 
