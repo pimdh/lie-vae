@@ -5,16 +5,16 @@ from .utils import View, Flatten
 
 
 class ChairsEncoder(nn.Module):
-    def __init__(self, id_dims=0, hidden_dims=50):
+    def __init__(self, content_dims=0, hidden_dims=50):
         super().__init__()
-        self.id_dims = id_dims
-        out_dims = 3 + id_dims
+        self.content_dims = content_dims
+        out_dims = 3 + content_dims
         self.conv = ChairsConvNet(out_dims, hidden_dims)
 
     def forward(self, img):
         x = self.conv(img)
         algebra = x[:, :3]
-        if self.id_dims:
+        if self.content_dims:
             id_data = x[:, 3:]
         else:
             id_data = None
@@ -23,10 +23,10 @@ class ChairsEncoder(nn.Module):
 
 class ChairsConvNet(nn.Sequential):
     def __init__(self, out_dims, hidden_dims=50):
-        input_dims = 1
+        in_dims = 1
         super().__init__(
             # input is (input_dims) x 64 x 64
-            nn.Conv2d(input_dims, hidden_dims, 4, 2, 1),
+            nn.Conv2d(in_dims, hidden_dims, 4, 2, 1),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (hidden_dims) x 32 x 32
             nn.Conv2d(hidden_dims, hidden_dims * 2, 4, 2, 1),

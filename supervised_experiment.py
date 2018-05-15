@@ -24,7 +24,6 @@ import numpy as np
 from torch.utils.data import DataLoader
 import os.path
 from pprint import pprint
-from PIL import Image
 from tensorboardX import SummaryWriter
 import argparse
 
@@ -39,87 +38,114 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class ActionNet(nn.Module):
     """Uses proper group action."""
-    def __init__(self, degrees, deconv, id_dims=10, data_dims=10,
-                 single_id=True, harmonics_encoder_layers=3):
+    def __init__(self, degrees, deconv, content_dims=10, rep_copies=10,
+                 single_id=True, harmonics_encoder_layers=3,
+                 with_mlp=False):
+        """Action decoder.
+
+        Params:
+        - degrees : max number of degrees of representation,
+                    harmonics matrix has (degrees+1)^2 rows
+        - deconv : deconvolutional network used after transformation
+        - single_id : whether to have single content vector or not
+        - content_dims : content vector dimension if single_id=False
+        - rep_copies : number of copies of representation / number of dimension
+                       of signal on sphere / columns of harmonics matrix
+        - harmonics_encoder_layers : number of layers of MLP that transforms
+                                     content vector to harmonics matrix
+        - with_mlp : route transformed harmonics through MLP before deconv
+        """
         super().__init__()
         self.degrees = degrees
-        self.data_dims = data_dims
+        self.rep_copies = rep_copies
         self.matrix_dims = (degrees + 1) ** 2
 
         if single_id:
-            self.item_rep = nn.Parameter(torch.randn((self.matrix_dims, data_dims)))
+            self.item_rep = nn.Parameter(torch.randn((self.matrix_dims, rep_copies)))
         else:
             self.item_rep = None
             self.harmonics_encoder = MLP(
-                id_dims, self.matrix_dims * self.data_dims, 50, harmonics_encoder_layers)
+                content_dims, self.matrix_dims * self.rep_copies,
+                50, harmonics_encoder_layers)
+
+        if with_mlp:
+            self.mlp = MLP(self.matrix_dims * rep_copies,
+                           self.matrix_dims * rep_copies, 50, 3)
+        else:
+            self.mlp = None
 
         self.deconv = deconv
 
-    def forward(self, matrices, id_data=None):
-        """Input dim is [batch, 3, 3]."""
-        assert (id_data is not None) != (self.item_rep is not None), \
-            'Either must be single id or provide id_data, not both.'
+    def forward(self, rot, content_data=None):
+        """Input is 3x3 rotation matrix and possibly content vector."""
+        assert (content_data is not None) != (self.item_rep is not None), \
+            'Either must be single id or provide content_data, not both.'
+        angles = group_matrix_to_eazyz(rot)
+        n = angles.size(0)
 
-        n = matrices.size(0)
-
-        if id_data is None:
+        if content_data is None:
             harmonics = self.item_rep.expand(n, -1, -1)
         else:
-            harmonics = self.harmonics_encoder(id_data)\
-                .view(n, self.matrix_dims, self.data_dims)
+            harmonics = self.harmonics_encoder(content_data)\
+                .view(n, self.matrix_dims, self.rep_copies)
 
-        angles = group_matrix_to_eazyz(matrices)
         item = block_wigner_matrix_multiply(angles, harmonics, self.degrees) \
-            .view(-1, self.matrix_dims * self.data_dims)
+            .view(-1, self.matrix_dims * self.rep_copies)
+
+        if self.mlp:
+            item = self.mlp(item)
 
         return self.deconv(item)
 
 
 class MLPNet(nn.Module):
-    """Uses MLP from group matrix."""
-    def __init__(self, degrees, deconv, data_dims=10, mode='MAT',
-                 id_dims=10, single_id=True):
+    """Decoder that concatenates group and content vector and routes through MLP.
+
+    Params:
+    - degrees : max number of degrees of representation,
+                harmonics matrix has (degrees+1)^2 rows
+    - deconv : deconvolutional network used after transformation
+    - in_dims : number of dimensions of (flattened) group input.
+                9 for matrix, 3 for angles.
+    - single_id : whether to have single content vector or not
+    - content_dims : content vector dimension if single_id=False
+    - rep_copies : number of copies of representation / number of dimension
+                   of signal on sphere / columns of harmonics matrix
+    """
+    def __init__(self, degrees, deconv, in_dims=9, rep_copies=10,
+                 content_dims=10, single_id=True):
         super().__init__()
         matrix_dims = (degrees + 1) ** 2
-        self.mode = mode
-        dims = {'MAT': 9, 'Q': 4, 'EA': 3}[mode]
 
         if not single_id:
-            dims += id_dims
+            in_dims += content_dims
 
-        self.mlp = MLP(dims, matrix_dims * data_dims, 50, 3)
+        self.mlp = MLP(in_dims, matrix_dims * rep_copies, 50, 3)
         self.deconv = deconv
         self.single_id = single_id
 
-    def forward(self, r, id_data=None):
-        """Input dim is [batch, 3, 3]."""
-        assert (id_data is None) != (not self.single_id), \
-            'Either must be single id or provide id_data, not both.'
-        n = r.size(0)
+    def forward(self, x, content_data=None):
+        assert (content_data is None) != (not self.single_id), \
+            'Either must be single id or provide content_data, not both.'
+        n = x.size(0)
+        x = x.view(n, -1)
 
-        if self.mode == 'MAT':
-            x = r.view(-1, 9)
-        elif self.mode == 'Q':
-            x = group_matrix_to_quaternions(r)
-        else:
-            x = group_matrix_to_eazyz(r)
-
-        if id_data is not None:
-            x = torch.cat((x, id_data.view(n, -1)), 1)
+        if content_data is not None:
+            x = torch.cat((x, content_data.view(n, -1)), 1)
 
         return self.deconv(self.mlp(x))
 
 
 def encode(encoder, single_id, item_label, rot_label, img_label):
     if encoder:
-        rot, id_data = encoder(img_label)
+        rot, content_data = encoder(img_label)
     else:
         rot = rot_label
         if not single_id:
-            id_data = torch.eye(10, device=device)[item_label]
+            content_data = torch.eye(10, device=device)[item_label]
         else:
-            id_data = None
-    return rot, id_data
+            content_data = None
+    return rot, content_data
 
 
 def test(loader, decoder, encoder=None, single_id=True):
@@ -130,8 +156,8 @@ def test(loader, decoder, encoder=None, single_id=True):
     for it, (item_label, rot_label, img_label) in enumerate(loader):
         rot_label, img_label = rot_label.to(device), img_label.to(device)
 
-        rot, id_data = encode(encoder, single_id, item_label, rot_label, img_label)
-        reconstruction = decoder(rot, id_data)
+        rot, content_data = encode(encoder, single_id, item_label, rot_label, img_label)
+        reconstruction = decoder(rot, content_data)
         loss = nn.MSELoss()(reconstruction, img_label)
         losses.append(loss.item())
     return np.mean(losses)
@@ -147,8 +173,8 @@ def train(epoch, train_loader, test_loader, decoder, optimizer, log, encoder=Non
 
         rot_label, img_label = rot_label.to(device), img_label.to(device)
 
-        rot, id_data = encode(encoder, single_id, item_label, rot_label, img_label)
-        reconstruction = decoder(rot, id_data)
+        rot, content_data = encode(encoder, single_id, item_label, rot_label, img_label)
+        reconstruction = decoder(rot, content_data)
 
         loss = nn.MSELoss()(reconstruction, img_label)
 
@@ -170,42 +196,32 @@ def train(epoch, train_loader, test_loader, decoder, optimizer, log, encoder=Non
             print(global_it, train_loss, test_loss)
 
 
-def generate_image(x, net, path):
-    """Render image for certain quaternion and write to path."""
-    reconstruction = net(x.to(device)[None])[0]
-    image_data = (reconstruction * 255).byte()
-    image_array = image_data.detach().to('cpu').numpy()
-    im = Image.fromarray(image_array)
-    im.convert('RGB').save(path)
-
-
 def main():
     args = parse_args()
     pprint(vars(args))
     log = SummaryWriter(args.log_dir)
 
     matrix_dims = (args.degrees + 1) ** 2
-    deconv = ChairsDeconvNet(matrix_dims * args.data_dims, args.deconv_hidden)
+    deconv = ChairsDeconvNet(matrix_dims * args.rep_copies, args.deconv_hidden)
     if args.mode == 'action':
         net = ActionNet(args.degrees,
                         deconv=deconv,
-                        id_dims=args.id_dims,
-                        data_dims=args.data_dims,
+                        content_dims=args.content_dims,
+                        rep_copies=args.rep_copies,
                         harmonics_encoder_layers=args.harmonics_encoder_layers,
                         single_id=args.single_id).to(device)
     elif args.mode == 'mlp':
         net = MLPNet(args.degrees,
                      deconv=deconv,
-                     id_dims=args.id_dims,
-                     data_dims=args.data_dims,
-                     mode=args.mlp_mode,
+                     content_dims=args.content_dims,
+                     rep_copies=args.rep_copies,
                      single_id=args.single_id).to(device)
     else:
         raise RuntimeError('Mode {} not found'.format(args.mode))
 
     if args.ae:
-        id_dims = args.id_dims if not args.single_id else 0
-        encoder = ChairsEncoder(id_dims).to(device)
+        content_dims = args.content_dims if not args.single_id else 0
+        encoder = ChairsEncoder(content_dims).to(device)
     else:
         encoder = None
 
@@ -215,11 +231,6 @@ def main():
         if encoder is not None:
             encoder.load_state_dict(torch.load(os.path.join(
                 args.save_dir, 'enc.pickle')))
-
-    # Demo image
-    # filename = './data/chairs/single/assets/chair.obj_0.0336_-0.1523_-0.5616_-0.8126.jpg'
-    # q = ShapeDataset.filename_to_quaternion(filename)
-    # x_demo = torch.tensor(SO3_coordinates(q, 'Q', 'MAT'), dtype=torch.float32)
 
     if args.single_id:
         dataset = ShapeDataset('data/chairs/single')
@@ -250,9 +261,6 @@ def main():
             if encoder is not None:
                 torch.save(encoder.state_dict(), os.path.join(
                     args.save_dir, 'enc.pickle'))
-            # generate_image(x_demo, net, os.path.join(
-            #     args.save_dir, '{}_{}.jpg'.format(args.mode, epoch+1)))
-
     log.close()
 
 
@@ -262,14 +270,13 @@ def parse_args():
                         help='whether to auto-encode')
     parser.add_argument('--mode', required=True,
                         help='[action, mlp]')
-    parser.add_argument('--mlp_mode', help='[MAT, Q, EA]', default='MAT')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--report_freq', type=int, default=1250)
     parser.add_argument('--degrees', type=int, default=3)
     parser.add_argument('--deconv_hidden', type=int, default=50)
-    parser.add_argument('--id_dims', type=int, default=10,
+    parser.add_argument('--content_dims', type=int, default=10,
                         help='The dims of the content latent code')
-    parser.add_argument('--data_dims', type=int, default=10,
+    parser.add_argument('--rep_copies', type=int, default=10,
                         help='The dims of the virtual signal on the Sphere, '
                              'i.e. the number of copies of the representation.')
     parser.add_argument('--clip_grads', type=float, default=1E-5)
