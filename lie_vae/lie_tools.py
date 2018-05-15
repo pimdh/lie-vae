@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
+import math
 from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
 from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense \
     import Jd as Jd_np
@@ -66,6 +68,14 @@ def rodrigues(v):
         + (1. - torch.cos(theta))[..., None]*(K@K)
     a = torch.sin(theta)[..., None]
     return R
+
+
+def vector_to_eazyz(v):
+    """Map 3 vector to euler angles."""
+    angles = F.tanh(v)
+    angles = angles * torch.tensor([math.pi, math.pi / 2, math.pi], device=v.device)
+    angles = angles + torch.tensor([0, math.pi / 2, 0], device=v.device)
+    return angles
 
 
 def log_map(R):

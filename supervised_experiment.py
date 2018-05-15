@@ -91,8 +91,11 @@ def main():
     matrix_dims = (args.degrees + 1) ** 2
     if args.deconv == 'upsample':
         deconv = ChairsDeconvNetUpsample(matrix_dims * args.rep_copies, args.deconv_hidden)
-    else:
+    elif args.deconv == 'deconv':
         deconv = ChairsDeconvNet(matrix_dims * args.rep_copies, args.deconv_hidden)
+    else:
+        raise RuntimeError()
+
     if args.mode == 'action':
         net = ActionNet(args.degrees,
                         deconv=deconv,
