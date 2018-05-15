@@ -74,6 +74,6 @@ class CubeDataset(TensorDataset):
 
         data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '../data/cubes')
-        data = np.load(os.path.join(data_dir, mode+'_data.npy'))
-        labels = np.load(os.path.join(data_dir, mode+'_labels.npy'))
-        super().__init__(torch.from_numpy(data), torch.from_numpy(labels))
+        data = np.load(os.path.join(data_dir, mode+'_data2.npy'))
+        # labels = np.load(os.path.join(data_dir, mode+'_labels.npy'))
+        super().__init__(torch.from_numpy(data.astype(np.float32))) #, torch.from_numpy(labels))

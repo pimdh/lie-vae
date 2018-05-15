@@ -120,10 +120,10 @@ class CubeVAE(VAE):
 
     def recon_loss(self, x_recon, x):
         x = x.expand_as(x_recon)
-        max_val = (-x_recon).clamp(min=0)
-        loss = x_recon - x_recon * x + max_val + ((-max_val).exp() + (-x_recon - max_val).exp()).log()
-
-        return loss.sum(-1).sum(-1).sum(-1)
+#         max_val = (-x_recon).clamp(min=0)
+#         loss = x_recon - x_recon * x + max_val + ((-max_val).exp() + (-x_recon - max_val).exp()).log()
+        return ((x_recon, x) ** 2).sum(-1).sum(-1).sum(-1)
+#         return loss.sum(-1).sum(-1).sum(-1)
 
 
 class ChairsVAE(VAE):
@@ -195,7 +195,7 @@ class ChairsVAE(VAE):
             raise RuntimeError()
 
     def forward(self, x, n=1):
-        z_pose, z_content = self.encode(x)
+        z_pose, z_content = self.encode(x, n=n)
 
         # Group samples and batch into batch
         batch_dims = z_pose.shape[:2]
@@ -221,4 +221,4 @@ class ChairsVAE(VAE):
 
     def recon_loss(self, x_recon, x):
         x = x.expand_as(x_recon)
-        return F.mse_loss(x_recon, x)
+        return ((x_recon, x) ** 2).sum(-1).sum(-1).sum(-1)
