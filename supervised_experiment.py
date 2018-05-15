@@ -117,7 +117,8 @@ def main():
 
     if args.ae:
         content_dims = args.content_dims if not args.single_id else 0
-        encoder = ChairsEncoder(content_dims).to(device)
+        encoder = ChairsEncoder(
+            content_dims, batch_norm=args.batch_norm).to(device)
     else:
         encoder = None
 
@@ -171,6 +172,8 @@ def parse_args():
                         help='[action, mlp]')
     parser.add_argument('--deconv', default='deconv',
                         help='Deconv mode [deconv, upsample, upsample4]')
+    parser.add_argument('--batch_norm', type=int, default=0,
+                        help='Whether to use Batch Norm in conv')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--report_freq', type=int, default=1250)
     parser.add_argument('--degrees', type=int, default=3)

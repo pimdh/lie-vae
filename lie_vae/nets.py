@@ -1,15 +1,18 @@
 from torch import nn as nn
 
 from .lie_tools import rodrigues
-from .utils import View, Flatten, MLP
+from .utils import View, Flatten
 
 
 class ChairsEncoder(nn.Module):
-    def __init__(self, content_dims=0, hidden_dims=50):
+    def __init__(self, content_dims=0, hidden_dims=50, batch_norm=False):
         super().__init__()
         self.content_dims = content_dims
         out_dims = 3 + content_dims
-        self.conv = ChairsConvNet(out_dims, hidden_dims)
+        if batch_norm:
+            self.conv = ChairsConvNetBN(out_dims, hidden_dims)
+        else:
+            self.conv = ChairsConvNet(out_dims, hidden_dims)
 
     def forward(self, img):
         x = self.conv(img)
@@ -39,6 +42,33 @@ class ChairsConvNet(nn.Sequential):
             # state size. (hidden_dims*4) x 8 x 8
             nn.Conv2d(hidden_dims * 4, hidden_dims * 8, 4, 2, 1),
             # nn.BatchNorm2d(hidden_dims * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (hidden_dims*8) x 4 x 4
+            nn.Conv2d(hidden_dims * 8, out_dims, 4, 1, 0),
+            # state size. out_dims x 1 x 1
+            Flatten()
+        )
+
+
+class ChairsConvNetBN(nn.Sequential):
+    def __init__(self, out_dims, hidden_dims=50):
+        in_dims = 1
+        super().__init__(
+            # input is (input_dims) x 64 x 64
+            nn.Conv2d(in_dims, hidden_dims, 4, 2, 1),
+            nn.BatchNorm2d(hidden_dims),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (hidden_dims) x 32 x 32
+            nn.Conv2d(hidden_dims, hidden_dims * 2, 4, 2, 1),
+            nn.BatchNorm2d(hidden_dims * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (hidden_dims*2) x 16 x 16
+            nn.Conv2d(hidden_dims * 2, hidden_dims * 4, 4, 2, 1),
+            nn.BatchNorm2d(hidden_dims * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (hidden_dims*4) x 8 x 8
+            nn.Conv2d(hidden_dims * 4, hidden_dims * 8, 4, 2, 1),
+            nn.BatchNorm2d(hidden_dims * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (hidden_dims*8) x 4 x 4
             nn.Conv2d(hidden_dims * 8, out_dims, 4, 1, 0),
@@ -120,6 +150,7 @@ class CubesConvNet(nn.Sequential):
         super().__init__(
             # input is (nc) x 32 x 32
             nn.Conv2d(3, ndf, 3, 1, 1, bias=False),
+            # nn.BatchNorm2d(ndf),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf) x 32 x 32
             nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
@@ -135,6 +166,37 @@ class CubesConvNet(nn.Sequential):
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*8) x 4 x 4
             nn.Conv2d(ndf * 8, ndf * 8, 4, 1, 0, bias=False),
+            # nn.BatchNorm2d(ndf * 8),
+            Flatten(),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(ndf * 8, ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+
+
+class CubesConvNetBN(nn.Sequential):
+    def __init__(self):
+        ndf = 16
+        super().__init__(
+            # input is (nc) x 32 x 32
+            nn.Conv2d(3, ndf, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(ndf),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf) x 32 x 32
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*2) x 16 x 16
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*4) x 8 x 8
+            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            # state size. (ndf*8) x 4 x 4
+            nn.Conv2d(ndf * 8, ndf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ndf * 8),
             Flatten(),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(ndf * 8, ndf * 4),

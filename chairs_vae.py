@@ -72,6 +72,7 @@ def main():
         rep_copies=args.rep_copies,
         degrees=args.degrees,
         deconv_hidden=args.deconv_hidden,
+        batch_norm=args.batch_norm
     ).to(device)
 
     if args.continue_epoch > 0:
@@ -112,6 +113,8 @@ def parse_args():
                         help='[so3, normal]')
     parser.add_argument('--deconv_mode', default='deconv',
                         help='Deconv mode [deconv, upsample]')
+    parser.add_argument('--batch_norm', type=int, default=0,
+                        help='Whether to use Batch Norm in conv')
     parser.add_argument('--beta', type=float, default=1.)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--report_freq', type=int, default=1250)
