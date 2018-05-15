@@ -11,6 +11,8 @@ from torch.optim import Adam
 from itertools import accumulate
 from torch.utils.data import Dataset
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
 
 def n2p(x, requires_grad=True, cuda=False):
     """converts numpy tensor to pytorch variable"""
@@ -165,3 +167,15 @@ class Flatten(nn.Module):
 
     def forward(self, x):
         return x.view(x.size(0), -1)
+
+
+def encode(encoder, single_id, item_label, rot_label, img_label):
+    if encoder:
+        rot, content_data = encoder(img_label)
+    else:
+        rot = rot_label
+        if not single_id:
+            content_data = torch.eye(10, device=device)[item_label]
+        else:
+            content_data = None
+    return rot, content_data
