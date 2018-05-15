@@ -29,7 +29,8 @@ import argparse
 
 from lie_vae.datasets import ShapeDataset, SelectedDataset
 from lie_vae.decoders import ActionNetWrapper as ActionNet, MLPNet
-from lie_vae.nets import ChairsEncoder, ChairsDeconvNet, ChairsDeconvNetUpsample
+from lie_vae.nets import ChairsEncoder, ChairsDeconvNet, ChairsDeconvNetUpsample, \
+    ChairsDeconvNetUpsample4
 from lie_vae.utils import random_split, encode
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -91,6 +92,8 @@ def main():
     matrix_dims = (args.degrees + 1) ** 2
     if args.deconv == 'upsample':
         deconv = ChairsDeconvNetUpsample(matrix_dims * args.rep_copies, args.deconv_hidden)
+    elif args.deconv == 'upsample4':
+        deconv = ChairsDeconvNetUpsample4(matrix_dims * args.rep_copies, args.deconv_hidden)
     elif args.deconv == 'deconv':
         deconv = ChairsDeconvNet(matrix_dims * args.rep_copies, args.deconv_hidden)
     else:
@@ -167,7 +170,7 @@ def parse_args():
     parser.add_argument('--mode', required=True,
                         help='[action, mlp]')
     parser.add_argument('--deconv', default='deconv',
-                        help='Deconv mode [deconv, upsample]')
+                        help='Deconv mode [deconv, upsample, upsample4]')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--report_freq', type=int, default=1250)
     parser.add_argument('--degrees', type=int, default=3)

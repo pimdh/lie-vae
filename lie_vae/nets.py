@@ -1,7 +1,7 @@
 from torch import nn as nn
 
 from .lie_tools import rodrigues
-from .utils import View, Flatten
+from .utils import View, Flatten, MLP
 
 
 class ChairsEncoder(nn.Module):
@@ -75,6 +75,29 @@ class ChairsDeconvNetUpsample(nn.Sequential):
             nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, 1, 3, 1, 1),
+        )
+
+
+class ChairsDeconvNetUpsample4(nn.Sequential):
+    """1x1 to 64x64 deconvolutional stack."""
+    def __init__(self, in_dims, hidden_dims):
+        super().__init__(
+            nn.Linear(in_dims, 16 * hidden_dims),
+            nn.LeakyReLU(0.2, inplace=True),
+            View(-1, hidden_dims, 4, 4),
             nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
