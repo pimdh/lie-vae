@@ -14,14 +14,22 @@ from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
 class ShapeDataset(Dataset):
     def __init__(self, directory):
         self.directory = directory
-        self.files = glob(os.path.join(directory, '**/*.jpg'), recursive=True)
+        index_path = os.path.join(directory, 'files.txt')
+        if os.path.exists(index_path):
+            with open(index_path, 'r') as f:
+                self.files = f.read().splitlines()
+            self.root = directory
+        else:
+            self.files = glob(os.path.join(directory, '**/*.jpg'), recursive=True)
+            self.root = None
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, idx):
         filename = self.files[idx]
-        image = Image.open(filename)
+        path = os.path.join(self.root, filename) if self.root else filename
+        image = Image.open(path)
         image_tensor = torch.tensor(np.array(image), dtype=torch.float32) / 255
         image_tensor = image_tensor.unsqueeze(0)  # Add color channel
         quaternion = self.filename_to_quaternion(filename)
