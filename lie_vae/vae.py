@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 
 from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, \
-    ChairsDeconvNetUpsample
+    ChairsDeconvNetUpsample, CubesConvNetBN, ChairsConvNetBN
 from .decoders import MLPNet, ActionNet
 from .reparameterize import  SO3reparameterize, N0reparameterize, Nreparameterize
 from .lie_tools import group_matrix_to_eazyz, vector_to_eazyz
@@ -68,13 +68,16 @@ class VAE(nn.Module):
 
 
 class CubeVAE(VAE):
-    def __init__(self, decoder_mode, latent_mode):
+    def __init__(self, decoder_mode, latent_mode, batch_norm=False):
         super().__init__()
         self.decoder_mode = decoder_mode
         self.latent_mode = latent_mode
 
         ndf = 16
-        self.encoder = CubesConvNet()
+        if batch_norm:
+            self.encoder = CubesConvNetBN()
+        else:
+            self.encoder = CubesConvNet()
 
         if self.decoder_mode == "mlp":
             deconv = CubesDeconvNet((6 + 1) ** 2 * 100, 50)
@@ -136,6 +139,7 @@ class ChairsVAE(VAE):
             rep_copies,
             degrees,
             deconv_hidden,
+            batch_norm,
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()
@@ -145,8 +149,12 @@ class ChairsVAE(VAE):
 
         group_reparam_in_dims = 10
         content_reparam_in_dims = content_dims
-        self.encoder = ChairsConvNet(
-            group_reparam_in_dims + content_reparam_in_dims)
+        if batch_norm:
+            self.encoder = ChairsConvNetBN(
+                group_reparam_in_dims + content_reparam_in_dims)
+        else:
+            self.encoder = ChairsConvNet(
+                group_reparam_in_dims + content_reparam_in_dims)
 
         # Setup latent space
         if self.latent_mode == 'so3':
