@@ -124,9 +124,8 @@ class SO3reparameterize(nn.Module):
         
         theta = self.v.norm(p=2,dim=-1, keepdim=True) #[n,B,1]
         u = self.v / theta #[n,B,3]
-        angles = Variable(torch.arange(-self.k, self.k+1) * 2 * math.pi) #[2k+1]
-        angles = angles.cuda() if self.v.is_cuda else angles
-         
+        angles = torch.arange(-self.k, self.k+1, device=u.device) * 2 * math.pi #[2k+1]
+
         theta_hat = theta[..., None, :] + angles[:,None] #[n,B,2k+1,1]
         
         clamp = 1e-5
@@ -156,8 +155,7 @@ class SO3reparameterize(nn.Module):
         return log_p
       
     def log_prior(self):
-        is_cuda = self.v.is_cuda
-        prior = t2p(torch.Tensor([1 / (8 * math.pi ** 2)]), cuda=is_cuda)
+        prior = torch.tensor([1 / (8 * math.pi ** 2)], device=self.z.device)
         return (prior.log()).expand_as(self.z[...,0,0])
         
 

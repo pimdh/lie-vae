@@ -1,13 +1,9 @@
 import numpy as np
-import math
+from functools import partial
 
 import torch
 from torch import nn
 from torch.autograd import Variable
-from torch import Tensor as t
-import torch.nn.functional as F
-from torch.distributions import Normal
-from torch.optim import Adam
 from itertools import accumulate
 from torch.utils.data import Dataset
 
@@ -179,3 +175,13 @@ def encode(encoder, single_id, item_label, rot_label, img_label):
         else:
             content_data = None
     return rot, content_data
+
+
+def tensor_slice(start, end, x):
+    """Slice last dimension of tensor."""
+    return x[..., start:end]
+
+
+def tensor_slicer(start, end):
+    """Return function that slices tensor in last dimension."""
+    return partial(tensor_slice, start, end)

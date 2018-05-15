@@ -1,12 +1,14 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 
-from .nets import CubesConvNet, CubesDeconvNet
+from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, \
+    ChairsDeconvNetUpsample
 from .decoders import MLPNet, ActionNet
 from .reparameterize import  SO3reparameterize, N0reparameterize, Nreparameterize
 from .lie_tools import group_matrix_to_eazyz, vector_to_eazyz
-from .utils import logsumexp
+from .utils import logsumexp, tensor_slicer
 
 
 class VAE(nn.Module):
@@ -122,3 +124,101 @@ class CubeVAE(VAE):
         loss = x_recon - x_recon * x + max_val + ((-max_val).exp() + (-x_recon - max_val).exp()).log()
 
         return loss.sum(-1).sum(-1).sum(-1)
+
+
+class ChairsVAE(VAE):
+    def __init__(
+            self, *,
+            content_dims,
+            latent_mode,
+            decoder_mode,
+            deconv_mode,
+            rep_copies,
+            degrees,
+            deconv_hidden,
+    ):
+        """See lie_vae/decoders.py for explanation of params."""
+        super().__init__()
+
+        self.latent_mode = latent_mode
+        self.decoder_mode = decoder_mode
+
+        group_reparam_in_dims = 10
+        content_reparam_in_dims = content_dims
+        self.encoder = ChairsConvNet(
+            group_reparam_in_dims + content_reparam_in_dims)
+
+        # Setup latent space
+        if self.latent_mode == 'so3':
+            self.rep_group = SO3reparameterize(
+                N0reparameterize(group_reparam_in_dims, z_dim=3), k=10)
+            group_dims = 9
+        elif self.latent_mode == 'normal':
+            self.rep_group = Nreparameterize(group_reparam_in_dims, 3)
+            group_dims = 3
+        else:
+            raise RuntimeError()
+
+        self.rep_content = Nreparameterize(
+            content_reparam_in_dims, z_dim=content_dims)
+        self.reparameterize = nn.ModuleList([self.rep_group, self.rep_content])
+
+        # Split output of encoder
+        self.r_callback = [tensor_slicer(0, group_reparam_in_dims),
+                           tensor_slicer(group_reparam_in_dims, None)]
+
+        # Setup decoder
+        matrix_dims = (degrees + 1) ** 2
+        if deconv_mode == 'deconv':
+            deconv = ChairsDeconvNet(matrix_dims * rep_copies, deconv_hidden)
+        elif deconv_mode == 'upsample':
+            deconv = ChairsDeconvNetUpsample(matrix_dims * rep_copies, deconv_hidden)
+        else:
+            raise RuntimeError()
+
+        if self.decoder_mode == 'action':
+            self.decoder = ActionNet(
+                degrees=degrees,
+                deconv=deconv,
+                content_dims=content_dims,
+                rep_copies=rep_copies,
+                single_id=False)
+        elif self.decoder_mode == 'mlp':
+            self.decoder = MLPNet(
+                degrees=degrees,
+                in_dims=group_dims,
+                deconv=deconv,
+                content_dims=content_dims,
+                rep_copies=rep_copies,
+                single_id=False)
+        else:
+            raise RuntimeError()
+
+    def forward(self, x, n=1):
+        z_pose, z_content = self.encode(x)
+
+        # Group samples and batch into batch
+        batch_dims = z_pose.shape[:2]
+        z_pose = z_pose.view(-1, *z_pose.shape[2:])
+        z_content = z_content.view(-1, *z_content.shape[2:])
+
+        if self.decoder_mode == "action":
+            if self.latent_mode == "so3":
+                angles = group_matrix_to_eazyz(z_pose)
+            elif self.latent_mode == "normal":
+                angles = vector_to_eazyz(z_pose)
+            else:
+                raise RuntimeError()
+
+            x_recon = self.decoder(angles, z_content)
+
+        elif self.decoder_mode == "mlp":
+            x_recon = self.decoder(z_pose, z_content)
+        else:
+            raise RuntimeError()
+
+        return x_recon.reshape(*batch_dims, 1, 64, 64)
+
+    def recon_loss(self, x_recon, x):
+        x = x.expand_as(x_recon)
+        return F.mse_loss(x_recon, x)
