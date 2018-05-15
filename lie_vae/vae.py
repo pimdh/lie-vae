@@ -99,7 +99,7 @@ class CubeVAE(VAE):
             raise RuntimeError()
 
     def forward(self, x, n=1):
-        z_list = self.encode(x)
+        z_list = self.encode(x, n=n)
         z_pose = z_list[0]
         z_pose_ = z_pose.view(-1, *z_pose.shape[2:])
 

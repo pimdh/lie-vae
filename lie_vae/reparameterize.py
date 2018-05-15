@@ -124,39 +124,46 @@ class SO3reparameterize(nn.Module):
         
         theta = self.v.norm(p=2,dim=-1, keepdim=True) #[n,B,1]
         u = self.v / theta #[n,B,3]
+        
         angles = torch.arange(-self.k, self.k+1, device=u.device) * 2 * math.pi #[2k+1]
 
         theta_hat = theta[..., None, :] + angles[:,None] #[n,B,2k+1,1]
-        
-        clamp = 1e-5
+
+        clamp = 1e-3
         
         #CLAMP FOR NUMERICAL STABILITY
-        theta_hat = torch.clamp(theta_hat, min=clamp)
-        #theta = torch.clamp(theta, min=1e-3)
         
         x = u[...,None,:] * theta_hat #[n,B,2k+1,3]
+        
         log_p = self.reparameterize._log_posterior(x.permute([0,2,1,3]).contiguous()) #[n,(2k+1),B,3] or [n,(2k+1),B]
+        
         # maybe reduce last dimension
         if len(log_p.size()) == 4:
-
             log_p = log_p.sum(-1) # [n,(2k+1),B]
-            
-        log_p = log_p.permute([0,2,1]) # [n,B,(2k+1)]
-        log_p.contiguous()
-        cos_theta_hat = torch.clamp(torch.cos(theta_hat), min = -1 + clamp, max = 1 - clamp)
         
-        log_vol =  2 * torch.log(theta_hat / (2 - (2) * cos_theta_hat )) #[n,B,(2k+1),1]
+        log_p = log_p.permute([0,2,1]) # [n,B,(2k+1)]
+        
+        
+        
+        theta_hat_squared = torch.clamp(theta_hat ** 2, min=clamp)
+        
+        log_p.contiguous()
+        cos_theta_hat = torch.cos(theta_hat)
+        
+        log_vol =  torch.log(theta_hat_squared / torch.clamp(2 - 2 * cos_theta_hat, min=clamp) ) #[n,B,(2k+1),1]
+        
         #print (log_vol.max())
         #print(log_vol.size())
-        log_p = log_p*log_vol.sum(-1)
         
-        log_p = logsumexp(log_p,-1) - np.log(8 * (np.pi ** 2)) #- (2 - (2) * torch.cos(theta)).log().sum(-1)
+        log_p = log_p + log_vol.sum(-1)
+        
+        log_p = logsumexp(log_p,-1) #- np.log(8 * (np.pi ** 2)) #- (2 - (2) * torch.cos(theta)).log().sum(-1)
        
         return log_p
       
     def log_prior(self):
-        prior = torch.tensor([1 / (8 * math.pi ** 2)], device=self.z.device)
-        return (prior.log()).expand_as(self.z[...,0,0])
+        prior = torch.tensor([- np.log(8 * (np.pi ** 2))], device=self.z.device)
+        return prior.expand_as(self.z[...,0,0])
         
 
     def nsample(self, n=1):
