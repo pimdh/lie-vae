@@ -64,6 +64,33 @@ class ChairsDeconvNet(nn.Sequential):
         )
 
 
+class ChairsDeconvNetUpsample(nn.Sequential):
+    """1x1 to 64x64 deconvolutional stack."""
+    def __init__(self, in_dims, hidden_dims):
+        super().__init__(
+            View(-1, in_dims, 1, 1),
+            nn.Conv2d(in_dims, hidden_dims, 3, 1, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, hidden_dims, 3, 1, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(hidden_dims, 1, 3, 1, 1),
+        )
+
+
 class CubesConvNet(nn.Sequential):
     def __init__(self):
         ndf = 16
