@@ -1,0 +1,13 @@
+#!/bin/bash         
+#SBATCH -t 10:00:00
+#SBATCH -N 1
+#SBATCH -C TitanX
+#SBATCH --gres=gpu:1
+#SBATCH --output=cubes.log
+. activate lie-pim 
+
+python -u CubeVAE.py --batch_dim 128 --epochs 100 --batch_norm --latent so3 --decoder mlp --save so3.mlp.pt
+python -u CubeVAE.py --batch_dim 128 --epochs 100 --batch_norm --latent normal --decoder mlp --save normal.mlp.pt
+python -u CubeVAE.py --batch_dim 128 --epochs 100 --batch_norm --latent so3 --decoder action --save so3.action.pt
+python -u CubeVAE.py --batch_dim 128 --epochs 100 --batch_norm --latent normal --decoder action --save normal.action.pt
+
