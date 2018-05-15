@@ -46,7 +46,7 @@ class Nreparameterize(nn.Module):
         return Normal(torch.zeros_like(self.mu), torch.ones_like(self.sigma)).log_prob(self.z).sum(-1)
    
     def nsample(self, n=1):
-        eps = Normal(torch.zeros_like(self.mu), torch.ones_like(self.mu)).sample_n(n)
+        eps = Normal(torch.zeros_like(self.mu), torch.ones_like(self.mu)).sample((n,))
         return self.mu + eps * self.sigma
 
 class N0reparameterize(nn.Module):
@@ -78,7 +78,7 @@ class N0reparameterize(nn.Module):
         return Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).log_prob(self.z).sum(-1)
    
     def nsample(self, n=1):
-        eps = Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).sample_n(n)
+        eps = Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).sample((n,))
         return eps * self.sigma
 
 
