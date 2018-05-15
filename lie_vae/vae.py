@@ -125,7 +125,7 @@ class CubeVAE(VAE):
         x = x.expand_as(x_recon)
 #         max_val = (-x_recon).clamp(min=0)
 #         loss = x_recon - x_recon * x + max_val + ((-max_val).exp() + (-x_recon - max_val).exp()).log()
-        return ((x_recon, x) ** 2).sum(-1).sum(-1).sum(-1)
+        return ((x_recon - x) ** 2).sum(-1).sum(-1).sum(-1)
 #         return loss.sum(-1).sum(-1).sum(-1)
 
 
@@ -229,4 +229,4 @@ class ChairsVAE(VAE):
 
     def recon_loss(self, x_recon, x):
         x = x.expand_as(x_recon)
-        return ((x_recon, x) ** 2).sum(-1).sum(-1).sum(-1)
+        return ((x_recon - x) ** 2).sum(-1).sum(-1).sum(-1)
