@@ -6,4 +6,4 @@
 #SBATCH --output=so3.action.log
 . activate lie-pim
 
-python -u --batch_dim 128 --epochs 100 --batch_norm --latent so3 --decoder action --save so3.action.pt
+python -u CubeVAE.py --batch_dim 128 --epochs 100 --batch_norm --latent so3 --decoder action --save so3.action.pt

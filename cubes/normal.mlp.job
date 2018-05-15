@@ -6,4 +6,4 @@
 #SBATCH --output=normal.mlp.log
 . activate lie-pim
 
-python -u --batch_dim 128 --epochs 100 --batch_norm --latent normal --decoder mlp --save normal.mlp.pt
+python -u CubeVAE.py --batch_dim 128 --epochs 100 --batch_norm --latent normal --decoder mlp --save normal.mlp.pt
