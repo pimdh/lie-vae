@@ -97,6 +97,8 @@ def main():
         beta_schedule = LinearSchedule(0.001, 0.1, 60000, 200000)
     elif args.beta_schedule == 'c':
         beta_schedule = LinearSchedule(0.001, 0.01, 60000, 200000)
+    elif args.beta_schedule == 'd':
+        beta_schedule = LinearSchedule(0.001, 10, 60000, 200000)
     else:
         raise RuntimeError('Wrong beta schedule')
 
