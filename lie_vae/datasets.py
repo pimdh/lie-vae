@@ -54,12 +54,12 @@ class ShapeDataset(Dataset):
         return [float(x) for x in matches]
 
 
-class SelectedDataset(ShapeDataset):
-    """Selected N chair types by hand. Name is mapped it ID integer."""
+class NamedDataset(ShapeDataset):
+    data_path, names_path = None, None
 
     def __init__(self):
-        super().__init__('data/chairs/ten')
-        with open('data/chairs/selected_chairs.txt', 'r') as f:
+        super().__init__(self.data_path)
+        with open(self.names_path, 'r') as f:
             self.name = re.findall('([A-z0-9]+)\.obj', f.read())
         self.map = {n: i for i, n in enumerate(self.name)}
 
@@ -68,18 +68,19 @@ class SelectedDataset(ShapeDataset):
         return self.map[name], group_el, image_tensor
 
 
-class ObjectsDataset(ShapeDataset):
-    """Selected objects by hand. Name is mapped it ID integer."""
+class SelectedDataset(NamedDataset):
+    data_path = 'data/chairs/ten'
+    names_path = 'data/chairs/selected_chairs.txt'
 
-    def __init__(self):
-        super().__init__('data/objects')
-        with open('data/objects/objects.txt', 'r') as f:
-            self.name = re.findall('([A-z0-9]+)\.obj', f.read())
-        self.map = {n: i for i, n in enumerate(self.name)}
 
-    def __getitem__(self, idx):
-        name, group_el, image_tensor = super().__getitem__(idx)
-        return self.map[name], group_el, image_tensor
+class ObjectsDataset(NamedDataset):
+    data_path = 'data/objects'
+    names_path = 'data/objects/objects.txt'
+
+
+class ThreeObjectsDataset(NamedDataset):
+    data_path = 'data/objects3'
+    names_path = 'data/objects3/objects.txt'
 
 
 class CubeDataset(TensorDataset):

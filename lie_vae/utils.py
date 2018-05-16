@@ -209,18 +209,20 @@ class LinearSchedule:
 
 
 def test_linear_schedule():
-    s = LinearSchedule(4, 6, 1, 3)
+    s = LinearSchedule(4, 10, 1, 4)
 
     np.testing.assert_allclose(s(0), 4)
     np.testing.assert_allclose(s(1), 4)
-    np.testing.assert_allclose(s(2), 5)
+    np.testing.assert_allclose(s(2), 6)
+    np.testing.assert_allclose(s(3), 8)
+    np.testing.assert_allclose(s(4), 10)
+    np.testing.assert_allclose(s(5), 10)
+
+    s = LinearSchedule(10, 4, 1, 4)
+
+    np.testing.assert_allclose(s(0), 10)
+    np.testing.assert_allclose(s(1), 10)
+    np.testing.assert_allclose(s(2), 8)
     np.testing.assert_allclose(s(3), 6)
-    np.testing.assert_allclose(s(4), 6)
-
-    s = LinearSchedule(4, 2, 1, 3)
-
-    np.testing.assert_allclose(s(0), 4)
-    np.testing.assert_allclose(s(1), 4)
-    np.testing.assert_allclose(s(2), 3)
-    np.testing.assert_allclose(s(3), 2)
-    np.testing.assert_allclose(s(4), 2)
+    np.testing.assert_allclose(s(4), 4)
+    np.testing.assert_allclose(s(5), 4)

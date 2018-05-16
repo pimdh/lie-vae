@@ -6,7 +6,7 @@ from pprint import pprint
 from tensorboardX import SummaryWriter
 import argparse
 
-from lie_vae.datasets import SelectedDataset, ObjectsDataset
+from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset
 from lie_vae.vae import ChairsVAE
 from lie_vae.utils import random_split, ConstantSchedule, LinearSchedule
 
@@ -82,10 +82,14 @@ def main():
         model.load_state_dict(torch.load(os.path.join(
             args.save_dir, 'model.pickle')))
 
-    if args.objects:
+    if args.dataset == 'objects':
         dataset = ObjectsDataset()
-    else:
+    elif args.dataset == 'objects3':
+        dataset = ThreeObjectsDataset()
+    elif args.dataset == 'chairs':
         dataset = SelectedDataset()
+    else:
+        raise RuntimeError('Wrong dataset')
     if not len(dataset):
         raise RuntimeError('Dataset empty')
 
@@ -126,8 +130,8 @@ def main():
 
 def parse_args():
     parser = argparse.ArgumentParser('Supervised experiment')
-    parser.add_argument('--objects', action='store_true',
-                        help='Whether to use objects data set')
+    parser.add_argument('--dataset', default='chairs',
+                        help='Data set to use, [chairs, objects, objects3]')
     parser.add_argument('--decoder_mode', required=True,
                         help='[action, mlp]')
     parser.add_argument('--latent_mode', required=True,
