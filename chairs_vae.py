@@ -18,8 +18,9 @@ def test(loader, model):
     losses = []
     for it, (item_label, rot_label, img_label) in enumerate(loader):
         img_label = img_label.to(device)
-        recon, kl = model.elbo(img_label)
-        losses.append((recon.mean().item(), kl.mean().item()))
+        recon, kl, (kl0, kl1) = model.elbo(img_label)
+        losses.append((recon.mean().item(), kl.mean().item(),
+                       kl1.mean().item(), kl0.mean().item()))
     return np.mean(losses, 0)
 
 
@@ -29,7 +30,7 @@ def train(epoch, train_loader, test_loader, model, optimizer, log,
     for it, (item_label, rot_label, img_label) in enumerate(train_loader):
         model.train()
         img_label = img_label.to(device)
-        recon, kl = model.elbo(img_label)
+        recon, kl, (kl0, kl1) = model.elbo(img_label)
 
         global_it = epoch * len(train_loader) + it + 1
         beta = beta_schedule(global_it)
@@ -45,18 +46,22 @@ def train(epoch, train_loader, test_loader, model, optimizer, log,
             torch.nn.utils.clip_grad_norm_(model.parameters(), clip_grads)
         optimizer.step()
 
-        losses.append((recon.mean().item(), kl.mean().item()))
+        losses.append((recon.mean().item(), kl.mean().item(),
+                       kl1.mean().item(), kl0.mean().item()))
 
         if (it + 1) % report_freq == 0 or it + 1 == len(train_loader):
-            train_recon, train_kl = np.mean(losses[-report_freq:], 0)
+            train_recon, train_kl, train_kl0, train_kl1 = np.mean(losses[-report_freq:], 0)
             log.add_scalar('train_loss', train_recon + beta * train_kl, global_it)
             log.add_scalar('train_recon', train_recon, global_it)
             log.add_scalar('train_kl', train_kl, global_it)
+            log.add_scalars('train_kls', {'kl0': train_kl0, 'kl1': train_kl1}, global_it)
 
-            test_recon, test_kl = test(test_loader, model)
+            test_recon, test_kl, test_kl0, test_kl1 = test(test_loader, model)
             log.add_scalar('test_loss', test_recon + beta * test_kl, global_it)
             log.add_scalar('test_recon', test_recon, global_it)
             log.add_scalar('test_kl', test_kl, global_it)
+            log.add_scalars('test_kls', {'kl0': test_kl0, 'kl1': test_kl1}, global_it)
+
             log.add_scalar('beta', beta, global_it)
             print('Epoch {} it {} train recon {:.4f} kl {:.4f} test recon {:.4f} kl {:.4f}'
                   .format(epoch, it+1, train_recon, train_kl, test_recon, test_kl))
@@ -103,6 +108,8 @@ def main():
         beta_schedule = LinearSchedule(0.001, 0.01, 60000, 200000)
     elif args.beta_schedule == 'd':
         beta_schedule = LinearSchedule(0.001, 10, 60000, 200000)
+    elif args.beta_schedule == 'e':
+        beta_schedule = LinearSchedule(0.001, 0.1, 60000, 120000)
     else:
         raise RuntimeError('Wrong beta schedule')
 

@@ -55,7 +55,7 @@ class VAE(nn.Module):
         # TODO maybe sum directly  without stacking 
         kl_summed = torch.sum(torch.stack(kl, -1), -1)
         recon_loss = self.recon_loss(x_recon, x)
-        return recon_loss, kl_summed
+        return recon_loss, kl_summed, kl
 
     def log_likelihood(self, x, n=1):
         x_recon = self.forward(x, n)
