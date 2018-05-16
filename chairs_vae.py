@@ -31,7 +31,8 @@ def train(epoch, train_loader, test_loader, model, optimizer, log,
         img_label = img_label.to(device)
         recon, kl = model.elbo(img_label)
 
-        beta = beta_schedule(it)
+        global_it = epoch * len(train_loader) + it + 1
+        beta = beta_schedule(global_it)
 
         loss = (recon + beta * kl).mean()
 
@@ -48,7 +49,6 @@ def train(epoch, train_loader, test_loader, model, optimizer, log,
 
         if (it + 1) % report_freq == 0 or it + 1 == len(train_loader):
             train_recon, train_kl = np.mean(losses[-report_freq:], 0)
-            global_it = epoch * len(train_loader) + it + 1
             log.add_scalar('train_loss', train_recon + beta * train_kl, global_it)
             log.add_scalar('train_recon', train_recon, global_it)
             log.add_scalar('train_kl', train_kl, global_it)
