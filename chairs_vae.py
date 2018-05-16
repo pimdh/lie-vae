@@ -6,9 +6,9 @@ from pprint import pprint
 from tensorboardX import SummaryWriter
 import argparse
 
-from lie_vae.datasets import SelectedDataset
+from lie_vae.datasets import SelectedDataset, ObjectsDataset
 from lie_vae.vae import ChairsVAE
-from lie_vae.utils import random_split
+from lie_vae.utils import random_split, ConstantSchedule, LinearSchedule
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -24,12 +24,14 @@ def test(loader, model):
 
 
 def train(epoch, train_loader, test_loader, model, optimizer, log,
-          report_freq=1250, clip_grads=None, beta=1.0):
+          beta_schedule, report_freq=1250, clip_grads=None):
     losses = []
     for it, (item_label, rot_label, img_label) in enumerate(train_loader):
         model.train()
         img_label = img_label.to(device)
         recon, kl = model.elbo(img_label)
+
+        beta = beta_schedule(it)
 
         loss = (recon + beta * kl).mean()
 
@@ -55,6 +57,7 @@ def train(epoch, train_loader, test_loader, model, optimizer, log,
             log.add_scalar('test_loss', test_recon + beta * test_kl, global_it)
             log.add_scalar('test_recon', test_recon, global_it)
             log.add_scalar('test_kl', test_kl, global_it)
+            log.add_scalar('beta', beta, global_it)
             print('Epoch {} it {} train recon {:.4f} kl {:.4f} test recon {:.4f} kl {:.4f}'
                   .format(epoch, it+1, train_recon, train_kl, test_recon, test_kl))
 
@@ -79,9 +82,19 @@ def main():
         model.load_state_dict(torch.load(os.path.join(
             args.save_dir, 'model.pickle')))
 
-    dataset = SelectedDataset()
+    if args.objects:
+        dataset = ObjectsDataset()
+    else:
+        dataset = SelectedDataset()
     if not len(dataset):
         raise RuntimeError('Dataset empty')
+
+    if args.beta_schedule is None:
+        beta_schedule = ConstantSchedule(args.beta)
+    elif args.beta_schedule == 'a':
+        beta_schedule = LinearSchedule(0.1, 1, 60000, 200000)
+    else:
+        raise RuntimeError('Wrong beta schedule')
 
     num_test = min(int(len(dataset) * 0.2), 5000)
     split = [len(dataset)-num_test, num_test]
@@ -96,7 +109,7 @@ def main():
     for epoch in range(args.continue_epoch, args.epochs):
         train(epoch, train_loader, test_loader, model, optimizer, log,
               report_freq=args.report_freq, clip_grads=args.clip_grads,
-              beta=args.beta)
+              beta_schedule=beta_schedule)
         if args.save_dir:
             if not os.path.exists(args.save_dir):
                 os.makedirs(args.save_dir)
@@ -107,18 +120,21 @@ def main():
 
 def parse_args():
     parser = argparse.ArgumentParser('Supervised experiment')
+    parser.add_argument('--objects', action='store_true',
+                        help='Whether to use objects data set')
     parser.add_argument('--decoder_mode', required=True,
                         help='[action, mlp]')
     parser.add_argument('--latent_mode', required=True,
                         help='[so3, normal]')
     parser.add_argument('--deconv_mode', default='deconv',
                         help='Deconv mode [deconv, upsample]')
-    parser.add_argument('--batch_norm', type=int, default=0,
+    parser.add_argument('--batch_norm', type=int, default=1,
                         help='Whether to use Batch Norm in conv')
     parser.add_argument('--beta', type=float, default=1.)
+    parser.add_argument('--beta_schedule', type=str)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--report_freq', type=int, default=1250)
-    parser.add_argument('--degrees', type=int, default=3)
+    parser.add_argument('--degrees', type=int, default=6)
     parser.add_argument('--deconv_hidden', type=int, default=50)
     parser.add_argument('--content_dims', type=int, default=10,
                         help='The dims of the content latent code')

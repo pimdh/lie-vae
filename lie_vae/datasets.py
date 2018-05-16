@@ -68,6 +68,20 @@ class SelectedDataset(ShapeDataset):
         return self.map[name], group_el, image_tensor
 
 
+class ObjectsDataset(ShapeDataset):
+    """Selected objects by hand. Name is mapped it ID integer."""
+
+    def __init__(self):
+        super().__init__('data/objects')
+        with open('data/objects/objects.txt', 'r') as f:
+            self.name = re.findall('([A-z0-9]+)\.obj', f.read())
+        self.map = {n: i for i, n in enumerate(self.name)}
+
+    def __getitem__(self, idx):
+        name, group_el, image_tensor = super().__getitem__(idx)
+        return self.map[name], group_el, image_tensor
+
+
 class CubeDataset(TensorDataset):
     def __init__(self, mode):
         assert mode in ['train', 'test', 'dev'], "Mode should be train|test|dev"

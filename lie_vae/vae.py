@@ -132,14 +132,14 @@ class CubeVAE(VAE):
 class ChairsVAE(VAE):
     def __init__(
             self, *,
-            content_dims,
             latent_mode,
             decoder_mode,
-            deconv_mode,
-            rep_copies,
-            degrees,
-            deconv_hidden,
-            batch_norm,
+            content_dims=10,
+            degrees=6,
+            deconv_hidden=50,
+            deconv_mode='deconv',
+            rep_copies=10,
+            batch_norm=True,
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()

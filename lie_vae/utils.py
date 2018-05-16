@@ -185,3 +185,42 @@ def tensor_slice(start, end, x):
 def tensor_slicer(start, end):
     """Return function that slices tensor in last dimension."""
     return partial(tensor_slice, start, end)
+
+
+class ConstantSchedule:
+    def __init__(self, value):
+        self.value = value
+
+    def __call__(self, x):
+        return self.value
+
+
+class LinearSchedule:
+    def __init__(self, start_y, end_y, start_x, end_x):
+        self.min_y = min(start_y, end_y)
+        self.max_y = max(start_y, end_y)
+        self.start_x = start_x
+        self.start_y = start_y
+        self.coef = (end_y - start_y) / (end_x - start_x)
+
+    def __call__(self, x):
+        return np.clip((x - self.start_x) * self.coef + self.start_y,
+                       self.min_y, self.max_y).item(0)
+
+
+def test_linear_schedule():
+    s = LinearSchedule(4, 6, 1, 3)
+
+    np.testing.assert_allclose(s(0), 4)
+    np.testing.assert_allclose(s(1), 4)
+    np.testing.assert_allclose(s(2), 5)
+    np.testing.assert_allclose(s(3), 6)
+    np.testing.assert_allclose(s(4), 6)
+
+    s = LinearSchedule(4, 2, 1, 3)
+
+    np.testing.assert_allclose(s(0), 4)
+    np.testing.assert_allclose(s(1), 4)
+    np.testing.assert_allclose(s(2), 3)
+    np.testing.assert_allclose(s(3), 2)
+    np.testing.assert_allclose(s(4), 2)
