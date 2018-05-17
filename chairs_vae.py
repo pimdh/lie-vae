@@ -135,6 +135,12 @@ def main():
         beta_schedule = LinearSchedule(0.001, 0.3, 30000, 60000)
     elif args.beta_schedule == 'i':
         beta_schedule = LinearSchedule(0.001, 1, 30000, 60000)
+    elif args.beta_schedule == 'j':
+        beta_schedule = LinearSchedule(0.001, 3, 30000, 60000)
+    elif args.beta_schedule == 'k':
+        beta_schedule = LinearSchedule(0.001, 10, 30000, 60000)
+    elif args.beta_schedule == 'l':
+        beta_schedule = LinearSchedule(0.001, 30, 30000, 60000)
     else:
         raise RuntimeError('Wrong beta schedule')
 
