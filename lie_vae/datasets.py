@@ -13,6 +13,7 @@ from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
 
 class ShapeDataset(Dataset):
     rgb = False
+    single_id = False
 
     def __init__(self, directory):
         self.directory = directory
@@ -104,6 +105,16 @@ class ColorHumanoidDataset(ShapeDataset):
 
     def __init__(self):
         super().__init__('data/chumanoid')
+
+    def filename_to_name(self, filename):
+        return 0
+
+
+class SingleChairDataset(ShapeDataset):
+    single_id = True
+
+    def __init__(self):
+        super().__init__('data/chairs/single')
 
     def filename_to_name(self, filename):
         return 0

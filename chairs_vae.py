@@ -7,7 +7,7 @@ from tensorboardX import SummaryWriter
 import argparse
 
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
-    HumanoidDataset, ColorHumanoidDataset
+    HumanoidDataset, ColorHumanoidDataset, SingleChairDataset
 from lie_vae.vae import ChairsVAE
 from lie_vae.utils import random_split, ConstantSchedule, LinearSchedule
 
@@ -19,7 +19,11 @@ def test(loader, model):
     losses = []
     for it, (item_label, rot_label, img_label) in enumerate(loader):
         img_label = img_label.to(device)
-        recon, kl, (kl0, kl1) = model.elbo(img_label)
+        recon, kl, kls = model.elbo(img_label)
+        if len(kls) == 2:
+            kl0, kl1 = kls
+        else:
+            kl0, kl1 = kls[0], torch.tensor(0.)
         losses.append((recon.mean().item(), kl.mean().item(),
                        kl1.mean().item(), kl0.mean().item()))
     return np.mean(losses, 0)
@@ -31,7 +35,11 @@ def train(epoch, train_loader, test_loader, model, optimizer, log,
     for it, (item_label, rot_label, img_label) in enumerate(train_loader):
         model.train()
         img_label = img_label.to(device)
-        recon, kl, (kl0, kl1) = model.elbo(img_label)
+        recon, kl, kls = model.elbo(img_label)
+        if len(kls) == 2:
+            kl0, kl1 = kls
+        else:
+            kl0, kl1 = kls[0], torch.tensor(0.)
 
         global_it = epoch * len(train_loader) + it + 1
         beta = beta_schedule(global_it)
@@ -83,6 +91,8 @@ def main():
         dataset = HumanoidDataset()
     elif args.dataset == 'chumanoid':
         dataset = ColorHumanoidDataset()
+    elif args.dataset == 'single':
+        dataset = SingleChairDataset()
     else:
         raise RuntimeError('Wrong dataset')
     if not len(dataset):
