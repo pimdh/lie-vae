@@ -31,9 +31,12 @@ class ShapeDataset(Dataset):
         path = os.path.join(self.root, filename) if self.root else filename
         image = Image.open(path)
         image_tensor = torch.tensor(np.array(image), dtype=torch.float32) / 255
-        image_tensor = image_tensor.unsqueeze(0)  # Add color channel
         quaternion = self.filename_to_quaternion(filename)
-        image_tensor = image_tensor.mean(-1)
+
+        if image_tensor.dim() == 3:  # Mean if RGB
+            image_tensor = image_tensor.mean(-1)
+
+        image_tensor = image_tensor.unsqueeze(0)  # Add color channel
 
         group_el = torch.tensor(SO3_coordinates(quaternion, 'Q', 'MAT'),
                                 dtype=torch.float32)
@@ -88,7 +91,7 @@ class HumanoidDataset(ShapeDataset):
         super().__init__('data/humanoid')
 
     def filename_to_name(self, filename):
-        return None
+        return 0
 
 
 class CubeDataset(TensorDataset):
