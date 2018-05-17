@@ -37,21 +37,21 @@ class ShapeDataset(Dataset):
 
         group_el = torch.tensor(SO3_coordinates(quaternion, 'Q', 'MAT'),
                                 dtype=torch.float32)
-
-        match = re.search(r'([A-z0-9]+)\.obj', filename)
-
-        assert match is not None, 'Could not find object id from filename'
-
-        name = match.group(1)
-
+        name = self.filename_to_name(filename)
         return name, group_el, image_tensor
 
-    @staticmethod
-    def filename_to_quaternion(filename):
+    def filename_to_quaternion(self, filename):
         """Remove extension, then retrieve _ separated floats"""
         matches = re.findall(r'-?[01]\.[0-9]{4}', filename)
         assert len(matches) == 4, 'No quaternion found in '+filename
         return [float(x) for x in matches]
+
+    def filename_to_name(self, filename):
+        match = re.search(r'([A-z0-9]+)\.obj', filename)
+
+        assert match is not None, 'Could not find object id from filename'
+
+        return match.group(1)
 
 
 class NamedDataset(ShapeDataset):
@@ -81,6 +81,14 @@ class ObjectsDataset(NamedDataset):
 class ThreeObjectsDataset(NamedDataset):
     data_path = 'data/objects3'
     names_path = 'data/objects3/objects.txt'
+
+
+class HumanoidDataset(ShapeDataset):
+    def __init__(self):
+        super().__init__('data/humanoid')
+
+    def filename_to_name(self, filename):
+        return None
 
 
 class CubeDataset(TensorDataset):

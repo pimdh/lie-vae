@@ -6,7 +6,8 @@ from pprint import pprint
 from tensorboardX import SummaryWriter
 import argparse
 
-from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset
+from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
+    HumanoidDataset
 from lie_vae.vae import ChairsVAE
 from lie_vae.utils import random_split, ConstantSchedule, LinearSchedule
 
@@ -93,6 +94,8 @@ def main():
         dataset = ThreeObjectsDataset()
     elif args.dataset == 'chairs':
         dataset = SelectedDataset()
+    elif args.dataset == 'humanoid':
+        dataset = HumanoidDataset()
     else:
         raise RuntimeError('Wrong dataset')
     if not len(dataset):
@@ -110,6 +113,8 @@ def main():
         beta_schedule = LinearSchedule(0.001, 10, 60000, 200000)
     elif args.beta_schedule == 'e':
         beta_schedule = LinearSchedule(0.001, 0.1, 60000, 120000)
+    elif args.beta_schedule == 'f':
+        beta_schedule = LinearSchedule(0.001, 1, 60000, 120000)
     else:
         raise RuntimeError('Wrong beta schedule')
 
