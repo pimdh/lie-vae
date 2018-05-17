@@ -12,6 +12,8 @@ from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
 
 
 class ShapeDataset(Dataset):
+    rgb = False
+
     def __init__(self, directory):
         self.directory = directory
         index_path = os.path.join(directory, 'files.txt')
@@ -33,10 +35,13 @@ class ShapeDataset(Dataset):
         image_tensor = torch.tensor(np.array(image), dtype=torch.float32) / 255
         quaternion = self.filename_to_quaternion(filename)
 
-        if image_tensor.dim() == 3:  # Mean if RGB
-            image_tensor = image_tensor.mean(-1)
+        if not self.rgb:
+            if image_tensor.dim() == 3:  # Mean if RGB
+                image_tensor = image_tensor.mean(-1)
 
-        image_tensor = image_tensor.unsqueeze(0)  # Add color channel
+            image_tensor = image_tensor.unsqueeze(0)  # Add color channel
+        else:
+            image_tensor = image_tensor.permute(2, 0, 1)
 
         group_el = torch.tensor(SO3_coordinates(quaternion, 'Q', 'MAT'),
                                 dtype=torch.float32)
@@ -89,6 +94,16 @@ class ThreeObjectsDataset(NamedDataset):
 class HumanoidDataset(ShapeDataset):
     def __init__(self):
         super().__init__('data/humanoid')
+
+    def filename_to_name(self, filename):
+        return 0
+
+
+class ColorHumanoidDataset(ShapeDataset):
+    rgb = True
+
+    def __init__(self):
+        super().__init__('data/chumanoid')
 
     def filename_to_name(self, filename):
         return 0

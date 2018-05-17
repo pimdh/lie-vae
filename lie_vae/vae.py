@@ -140,6 +140,7 @@ class ChairsVAE(VAE):
             deconv_mode='deconv',
             rep_copies=10,
             batch_norm=True,
+            rgb=False
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()
@@ -151,10 +152,10 @@ class ChairsVAE(VAE):
         content_reparam_in_dims = content_dims
         if batch_norm:
             self.encoder = ChairsConvNetBN(
-                group_reparam_in_dims + content_reparam_in_dims)
+                group_reparam_in_dims + content_reparam_in_dims, rgb=rgb)
         else:
             self.encoder = ChairsConvNet(
-                group_reparam_in_dims + content_reparam_in_dims)
+                group_reparam_in_dims + content_reparam_in_dims, rgb=rgb)
 
         # Setup latent space
         if self.latent_mode == 'so3':
@@ -178,9 +179,9 @@ class ChairsVAE(VAE):
         # Setup decoder
         matrix_dims = (degrees + 1) ** 2
         if deconv_mode == 'deconv':
-            deconv = ChairsDeconvNet(matrix_dims * rep_copies, deconv_hidden)
+            deconv = ChairsDeconvNet(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
         elif deconv_mode == 'upsample':
-            deconv = ChairsDeconvNetUpsample(matrix_dims * rep_copies, deconv_hidden)
+            deconv = ChairsDeconvNetUpsample(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
         else:
             raise RuntimeError()
 
@@ -225,7 +226,7 @@ class ChairsVAE(VAE):
         else:
             raise RuntimeError()
 
-        return x_recon.reshape(*batch_dims, 1, 64, 64)
+        return x_recon.reshape(*batch_dims, x.shape[1], 64, 64)
 
     def recon_loss(self, x_recon, x):
         x = x.expand_as(x_recon)

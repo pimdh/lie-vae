@@ -7,7 +7,7 @@ from tensorboardX import SummaryWriter
 import argparse
 
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
-    HumanoidDataset
+    HumanoidDataset, ColorHumanoidDataset
 from lie_vae.vae import ChairsVAE
 from lie_vae.utils import random_split, ConstantSchedule, LinearSchedule
 
@@ -73,21 +73,6 @@ def main():
     pprint(vars(args))
     log = SummaryWriter(args.log_dir)
 
-    model = ChairsVAE(
-        content_dims=args.content_dims,
-        latent_mode=args.latent_mode,
-        decoder_mode=args.decoder_mode,
-        deconv_mode=args.deconv_mode,
-        rep_copies=args.rep_copies,
-        degrees=args.degrees,
-        deconv_hidden=args.deconv_hidden,
-        batch_norm=args.batch_norm
-    ).to(device)
-
-    if args.continue_epoch > 0:
-        model.load_state_dict(torch.load(os.path.join(
-            args.save_dir, 'model.pickle')))
-
     if args.dataset == 'objects':
         dataset = ObjectsDataset()
     elif args.dataset == 'objects3':
@@ -96,10 +81,28 @@ def main():
         dataset = SelectedDataset()
     elif args.dataset == 'humanoid':
         dataset = HumanoidDataset()
+    elif args.dataset == 'chumanoid':
+        dataset = ColorHumanoidDataset()
     else:
         raise RuntimeError('Wrong dataset')
     if not len(dataset):
         raise RuntimeError('Dataset empty')
+
+    model = ChairsVAE(
+        content_dims=args.content_dims,
+        latent_mode=args.latent_mode,
+        decoder_mode=args.decoder_mode,
+        deconv_mode=args.deconv_mode,
+        rep_copies=args.rep_copies,
+        degrees=args.degrees,
+        deconv_hidden=args.deconv_hidden,
+        batch_norm=args.batch_norm,
+        rgb=dataset.rgb
+    ).to(device)
+
+    if args.continue_epoch > 0:
+        model.load_state_dict(torch.load(os.path.join(
+            args.save_dir, 'model.pickle')))
 
     if args.beta_schedule is None:
         beta_schedule = ConstantSchedule(args.beta)

@@ -37,6 +37,7 @@ def main():
     parser.add_argument('envname', type=str)
     parser.add_argument("num_samples", type=int)
     parser.add_argument("dir", type=str)
+    parser.add_argument("--greyscale", type=int, default=0)
     args = parser.parse_args()
 
     if not os.path.exists(args.dir):
@@ -83,7 +84,9 @@ def main():
                     cam.elevation = elevation * 180 / np.pi
                     i = sim.render(200, 200, mode='offscreen')
                     img = PIL.Image.fromarray(i)
-                    img = img.convert('L')
+
+                    if args.greyscale:
+                        img = img.convert('L')
                     img = img.rotate(roll * 180 / np.pi - 180)
                     img = ImageEnhance.Brightness(img).enhance(4)
                     img = ImageEnhance.Contrast(img).enhance(0.8)
