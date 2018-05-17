@@ -107,7 +107,8 @@ def main():
         degrees=args.degrees,
         deconv_hidden=args.deconv_hidden,
         batch_norm=args.batch_norm,
-        rgb=dataset.rgb
+        rgb=dataset.rgb,
+        single_id=dataset.single_id
     ).to(device)
 
     if args.continue_epoch > 0:
