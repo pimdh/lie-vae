@@ -30,7 +30,8 @@ def test(loader, model):
 
 
 def train(epoch, train_loader, test_loader, model, optimizer, log,
-          beta_schedule, report_freq=1250, clip_grads=None):
+          beta_schedule, report_freq=1250, clip_grads=None,
+          selective_clip=False):
     losses = []
     for it, (item_label, rot_label, img_label) in enumerate(train_loader):
         model.train()
@@ -52,7 +53,12 @@ def train(epoch, train_loader, test_loader, model, optimizer, log,
         optimizer.zero_grad()
         loss.backward()
         if clip_grads:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), clip_grads)
+            if selective_clip:
+                params = list(model.encoder.parameters()) \
+                         + list(model.rep_group.parameters())
+            else:
+                params = model.parameters()
+            torch.nn.utils.clip_grad_norm_(params, clip_grads)
         optimizer.step()
 
         losses.append((recon.mean().item(), kl.mean().item(),
@@ -157,7 +163,8 @@ def main():
     for epoch in range(args.continue_epoch, args.epochs):
         train(epoch, train_loader, test_loader, model, optimizer, log,
               report_freq=args.report_freq, clip_grads=args.clip_grads,
-              beta_schedule=beta_schedule)
+              beta_schedule=beta_schedule,
+              selective_clip=args.selective_clip)
         if args.save_dir:
             if not os.path.exists(args.save_dir):
                 os.makedirs(args.save_dir)
@@ -190,6 +197,7 @@ def parse_args():
                         help='The dims of the virtual signal on the Sphere, '
                              'i.e. the number of copies of the representation.')
     parser.add_argument('--clip_grads', type=float, default=1E-5)
+    parser.add_argument('--selective_clip', action='store_true')
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
     parser.add_argument('--continue_epoch', type=int, default=0)
