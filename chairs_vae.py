@@ -155,6 +155,8 @@ def main():
         beta_schedule = LinearSchedule(0.001, 10, 60000, 120000)
     elif args.beta_schedule == 'o':
         beta_schedule = LinearSchedule(0.001, 30, 60000, 120000)
+    elif args.beta_schedule == 'p':
+        beta_schedule = LinearSchedule(0.001, 100, 60000, 120000)
     else:
         raise RuntimeError('Wrong beta schedule')
 
