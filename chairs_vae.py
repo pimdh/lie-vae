@@ -14,12 +14,12 @@ from lie_vae.utils import random_split, ConstantSchedule, LinearSchedule
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
-def test(loader, model):
+def test(loader, model, elbo_samples=1):
     model.eval()
     losses = []
     for it, (item_label, rot_label, img_label) in enumerate(loader):
         img_label = img_label.to(device)
-        recon, kl, kls = model.elbo(img_label)
+        recon, kl, kls = model.elbo(img_label, n=elbo_samples)
         if len(kls) == 2:
             kl0, kl1 = kls
         else:
@@ -31,12 +31,12 @@ def test(loader, model):
 
 def train(epoch, train_loader, test_loader, model, optimizer, log,
           beta_schedule, report_freq=1250, clip_grads=None,
-          selective_clip=False):
+          selective_clip=False, elbo_samples=1):
     losses = []
     for it, (item_label, rot_label, img_label) in enumerate(train_loader):
         model.train()
         img_label = img_label.to(device)
-        recon, kl, kls = model.elbo(img_label)
+        recon, kl, kls = model.elbo(img_label, n=elbo_samples)
         if len(kls) == 2:
             kl0, kl1 = kls
         else:
@@ -164,7 +164,7 @@ def main():
         train(epoch, train_loader, test_loader, model, optimizer, log,
               report_freq=args.report_freq, clip_grads=args.clip_grads,
               beta_schedule=beta_schedule,
-              selective_clip=args.selective_clip)
+              elbo_samples=args.elbo_samples)
         if args.save_dir:
             if not os.path.exists(args.save_dir):
                 os.makedirs(args.save_dir)
@@ -198,6 +198,7 @@ def parse_args():
                              'i.e. the number of copies of the representation.')
     parser.add_argument('--clip_grads', type=float, default=1E-5)
     parser.add_argument('--selective_clip', action='store_true')
+    parser.add_argument('--elbo_samples', type=int, default=1)
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
     parser.add_argument('--continue_epoch', type=int, default=0)
