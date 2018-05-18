@@ -7,7 +7,7 @@ from tensorboardX import SummaryWriter
 import argparse
 
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
-    HumanoidDataset, ColorHumanoidDataset, SingleChairDataset
+    HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset
 from lie_vae.vae import ChairsVAE
 from lie_vae.utils import random_split, ConstantSchedule, LinearSchedule
 
@@ -99,6 +99,8 @@ def main():
         dataset = ColorHumanoidDataset()
     elif args.dataset == 'single':
         dataset = SingleChairDataset()
+    elif args.dataset == 'spherecube':
+        dataset = SphereCubeDataset()
     else:
         raise RuntimeError('Wrong dataset')
     if not len(dataset):

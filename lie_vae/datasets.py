@@ -42,7 +42,7 @@ class ShapeDataset(Dataset):
 
             image_tensor = image_tensor.unsqueeze(0)  # Add color channel
         else:
-            image_tensor = image_tensor.permute(2, 0, 1)
+            image_tensor = image_tensor[:, :, :3].permute(2, 0, 1)
 
         group_el = torch.tensor(SO3_coordinates(quaternion, 'Q', 'MAT'),
                                 dtype=torch.float32)
@@ -115,6 +115,17 @@ class SingleChairDataset(ShapeDataset):
 
     def __init__(self):
         super().__init__('data/chairs/single')
+
+    def filename_to_name(self, filename):
+        return 0
+
+
+class SphereCubeDataset(ShapeDataset):
+    rgb = True
+    single_id = True
+
+    def __init__(self):
+        super().__init__('data/spherecube')
 
     def filename_to_name(self, filename):
         return 0
