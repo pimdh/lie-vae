@@ -80,15 +80,15 @@ class CubeVAE(VAE):
             self.encoder = CubesConvNet()
 
         if self.decoder_mode == "mlp":
-            deconv = CubesDeconvNet((6 + 1) ** 2 * 100, 50)
+            deconv = CubesDeconvNet((6 + 1) ** 2 * 10, 50)
             if self.latent_mode == "so3":
                 self.rep0 = SO3reparameterize(N0reparameterize(ndf * 4, z_dim=3), k=10)
                 self.reparameterize = [self.rep0]
-                self.decoder = MLPNet(in_dims=9, degrees=6, rep_copies=100, deconv=deconv)
+                self.decoder = MLPNet(in_dims=9, degrees=6, rep_copies=10, deconv=deconv)
             elif self.latent_mode == "normal":
                 self.rep0 = Nreparameterize(ndf * 4, 3)
                 self.reparameterize = [self.rep0]
-                self.decoder = MLPNet(in_dims=3, degrees=6, rep_copies=100, deconv=deconv)
+                self.decoder = MLPNet(in_dims=3, degrees=6, rep_copies=10, deconv=deconv)
         elif self.decoder_mode == "action":
             if self.latent_mode == "so3":
                 self.rep0 = SO3reparameterize(N0reparameterize(ndf * 4, z_dim=3), k=10)
