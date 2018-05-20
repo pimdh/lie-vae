@@ -1,5 +1,4 @@
 import torch
-from torch.utils.data import DataLoader
 import os.path
 from pprint import pprint
 from tensorboardX import SummaryWriter
@@ -7,7 +6,7 @@ import argparse
 
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
     HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset
-from lie_vae.experiments import UnsupervisedExperiment
+from lie_vae.experiments import UnsupervisedExperiment, SemiSupervisedExperiment
 from lie_vae.vae import ChairsVAE
 from lie_vae.utils import random_split
 from lie_vae.beta_schedule import get_beta_schedule
@@ -59,24 +58,32 @@ def main():
     num_test = min(int(len(dataset) * 0.2), 5000)
     split = [len(dataset)-num_test, num_test]
     train_dataset, test_dataset = random_split(dataset, split)
-    train_loader = DataLoader(train_dataset, batch_size=64,
-                              shuffle=True, num_workers=10)
-    test_loader = DataLoader(test_dataset, batch_size=64,
-                             shuffle=True, num_workers=10)
 
     optimizer = torch.optim.Adam(model.parameters())
 
-    experiment = UnsupervisedExperiment(
+    if args.experiment == 'unsupervised':
+        exp_cls = UnsupervisedExperiment
+        exp_kwargs = {}
+    elif args.experiment == 'semi':
+        exp_cls = SemiSupervisedExperiment
+        exp_kwargs = {
+            'num_labelled': args.semi_labelled,
+            'lambda_supervised': args.semi_lambda}
+    else:
+        raise RuntimeError('Wrong experiment')
+
+    experiment = exp_cls(
         log=log,
         model=model,
         optimizer=optimizer,
         beta_schedule=get_beta_schedule(args.beta_schedule, args.beta),
-        train_loader=train_loader,
-        test_loader=test_loader,
+        train_dataset=train_dataset,
+        test_dataset=test_dataset,
         elbo_samples=args.elbo_samples,
         report_freq=args.report_freq,
         clip_grads=args.clip_grads,
-        selective_clip=args.selective_clip
+        selective_clip=args.selective_clip,
+        **exp_kwargs
     )
 
     for epoch in range(args.continue_epoch, args.epochs):
@@ -93,11 +100,14 @@ def main():
 def parse_args():
     parser = argparse.ArgumentParser('VAE experiment')
     parser.add_argument('--dataset', default='chairs',
-                        help='Data set to use, [chairs, objects, objects3]')
+                        help='Data set to use, [chairs, objects, objects3,'
+                             'spherecube, chumanoid, single]')
     parser.add_argument('--decoder_mode', required=True,
                         help='[action, mlp]')
     parser.add_argument('--latent_mode', required=True,
                         help='[so3, normal]')
+    parser.add_argument('--experiment', default='unsupervised',
+                        help='[unsupervised, semi]')
     parser.add_argument('--deconv_mode', default='deconv',
                         help='Deconv mode [deconv, upsample]')
     parser.add_argument('--batch_norm', type=int, default=1,
@@ -119,6 +129,12 @@ def parse_args():
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
     parser.add_argument('--continue_epoch', type=int, default=0)
+    parser.add_argument('--semi_labelled', type=int, default=100,
+                        help='Number of labelled samples')
+    parser.add_argument('--semi_lambda', type=float, default=1.,
+                        help='Relative strength of supervised loss')
+    parser.add_argument('--semi_batch', type=int, default=1,
+                        help='Number of labelled samples in each batch')
     return parser.parse_args()
 
 

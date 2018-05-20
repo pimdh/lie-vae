@@ -226,3 +226,10 @@ def test_linear_schedule():
     np.testing.assert_allclose(s(3), 6)
     np.testing.assert_allclose(s(4), 4)
     np.testing.assert_allclose(s(5), 4)
+
+
+def cycle(iterable):
+    """Cycle iterable non-caching."""
+    while True:
+        for x in iterable:
+            yield x
