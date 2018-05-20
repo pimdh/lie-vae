@@ -6,7 +6,7 @@ import numpy as np
 from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, \
     ChairsDeconvNetUpsample, CubesConvNetBN, ChairsConvNetBN
 from .decoders import MLPNet, ActionNet
-from .reparameterize import  SO3reparameterize, N0reparameterize, Nreparameterize
+from .reparameterize import  SO3reparameterize, N0reparameterize, Nreparameterize, Sreparameterize
 from .lie_tools import group_matrix_to_eazyz, vector_to_eazyz
 from .utils import logsumexp, tensor_slicer
 
@@ -89,6 +89,11 @@ class CubeVAE(VAE):
                 self.rep0 = Nreparameterize(ndf * 4, 3)
                 self.reparameterize = [self.rep0]
                 self.decoder = MLPNet(in_dims=3, degrees=6, rep_copies=100, deconv=deconv)
+            elif self.latent_mode == "vmf":
+                self.rep0 = Sreparameterize(ndf * 4, 4)
+                self.reparameterize = [self.rep0]
+                self.decoder = MLPNet(in_dims=4, degrees=6, rep_copies=100, deconv=deconv)
+                
         elif self.decoder_mode == "action":
             if self.latent_mode == "so3":
                 self.rep0 = SO3reparameterize(N0reparameterize(ndf * 4, z_dim=3), k=10)
@@ -96,6 +101,10 @@ class CubeVAE(VAE):
             elif self.latent_mode == "normal":
                 self.rep0 = Nreparameterize(ndf * 4, 3)
                 self.reparameterize = [self.rep0]
+            elif self.latent_mode == "vmf":
+                self.rep0 = Sreparameterize(ndf * 4, 4)
+                self.reparameterize = [self.rep0]
+                
             deconv = CubesDeconvNet((6 + 1) ** 2 * 10, 50)
             self.decoder = ActionNet(6, rep_copies=10, with_mlp=True, deconv=deconv)
         else:
