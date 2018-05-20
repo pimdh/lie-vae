@@ -10,6 +10,8 @@ from torch.distributions import Normal
 from .utils import logsumexp, n2p, t2p
 from .lie_tools import rodrigues, map2LieAlgebra
 
+from hyperspherical_vae_pytorch.distributions import VonMisesFisher, HypersphericalUniform
+
 class Nreparameterize(nn.Module):
 
     def __init__(self, input_dim, z_dim):
@@ -49,6 +51,34 @@ class Nreparameterize(nn.Module):
         eps = Normal(torch.zeros_like(self.mu), torch.ones_like(self.mu)).sample((n,))
         return self.mu + eps * self.sigma
 
+class Sreparameterize(nn.Module):
+
+    def __init__(self, input_dim, z_dim):
+        super(Sreparameterize, self).__init__()
+
+        self.input_dim = input_dim
+        self.z_dim = z_dim
+        self.k_linear = nn.Linear(input_dim, 1)
+        self.mu_linear = nn.Linear(input_dim, z_dim)
+
+    def forward(self, x, n=1):
+        self.mu = self.mu_linear(x)
+        self.k = F.softplus(self.k_linear(x))
+        self.z = self.nsample(n=n)
+        return self.z
+
+    def kl(self):
+        return - VonMisesFisher(self.mu, self.k).entropy() + HypersphericalUniform(self.z_dim - 1).entropy() 
+    
+    def log_posterior(self):
+        return VonMisesFisher(self.mu, self.k).log_prob(self.z)
+    
+    def log_prior(self):
+        return HypersphericalUniform(self.z_dim - 1).log_prob(self.z)
+   
+    def nsample(self, n=1):
+        return VonMisesFisher(self.mu, self.k).rsample(n)
+    
 class N0reparameterize(nn.Module):
 
     def __init__(self, input_dim, z_dim):

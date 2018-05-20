@@ -49,7 +49,10 @@ class ActionNet(nn.Module):
         """Input is ZYZ Euler angles and possibly content vector."""
         assert (content_data is not None) != (self.item_rep is not None), \
             'Either must be single id or provide content_data, not both.'
-        n = angles.size(0)
+        n, d = angles.shape
+
+        assert d == 3, 'Input should be Euler angles.'
+
 
         if content_data is None:
             harmonics = self.item_rep.expand(n, -1, -1)

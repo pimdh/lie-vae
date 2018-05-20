@@ -12,6 +12,9 @@ from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
 
 
 class ShapeDataset(Dataset):
+    rgb = False
+    single_id = False
+
     def __init__(self, directory):
         self.directory = directory
         index_path = os.path.join(directory, 'files.txt')
@@ -31,41 +34,101 @@ class ShapeDataset(Dataset):
         path = os.path.join(self.root, filename) if self.root else filename
         image = Image.open(path)
         image_tensor = torch.tensor(np.array(image), dtype=torch.float32) / 255
-        image_tensor = image_tensor.unsqueeze(0)  # Add color channel
         quaternion = self.filename_to_quaternion(filename)
-        image_tensor = image_tensor.mean(-1)
+
+        if not self.rgb:
+            if image_tensor.dim() == 3:  # Mean if RGB
+                image_tensor = image_tensor.mean(-1)
+
+            image_tensor = image_tensor.unsqueeze(0)  # Add color channel
+        else:
+            image_tensor = image_tensor[:, :, :3].permute(2, 0, 1)
 
         group_el = torch.tensor(SO3_coordinates(quaternion, 'Q', 'MAT'),
                                 dtype=torch.float32)
-
-        match = re.search(r'([A-z0-9]+)\.obj', filename)
-
-        assert match is not None, 'Could not find object id from filename'
-
-        name = match.group(1)
-
+        name = self.filename_to_name(filename)
         return name, group_el, image_tensor
 
-    @staticmethod
-    def filename_to_quaternion(filename):
+    def filename_to_quaternion(self, filename):
         """Remove extension, then retrieve _ separated floats"""
         matches = re.findall(r'-?[01]\.[0-9]{4}', filename)
         assert len(matches) == 4, 'No quaternion found in '+filename
         return [float(x) for x in matches]
 
+    def filename_to_name(self, filename):
+        match = re.search(r'([A-z0-9]+)\.obj', filename)
 
-class SelectedDataset(ShapeDataset):
-    """Selected N chair types by hand. Name is mapped it ID integer."""
+        assert match is not None, 'Could not find object id from filename'
+
+        return match.group(1)
+
+
+class NamedDataset(ShapeDataset):
+    data_path, names_path = None, None
 
     def __init__(self):
-        super().__init__('data/chairs/ten')
-        with open('data/chairs/selected_chairs.txt', 'r') as f:
+        super().__init__(self.data_path)
+        with open(self.names_path, 'r') as f:
             self.name = re.findall('([A-z0-9]+)\.obj', f.read())
         self.map = {n: i for i, n in enumerate(self.name)}
 
     def __getitem__(self, idx):
         name, group_el, image_tensor = super().__getitem__(idx)
         return self.map[name], group_el, image_tensor
+
+
+class SelectedDataset(NamedDataset):
+    data_path = 'data/chairs/ten'
+    names_path = 'data/chairs/selected_chairs.txt'
+
+
+class ObjectsDataset(NamedDataset):
+    data_path = 'data/objects'
+    names_path = 'data/objects/objects.txt'
+
+
+class ThreeObjectsDataset(NamedDataset):
+    data_path = 'data/objects3'
+    names_path = 'data/objects3/objects.txt'
+
+
+class HumanoidDataset(ShapeDataset):
+    def __init__(self):
+        super().__init__('data/humanoid')
+
+    def filename_to_name(self, filename):
+        return 0
+
+
+class ColorHumanoidDataset(ShapeDataset):
+    rgb = True
+
+    def __init__(self):
+        super().__init__('data/chumanoid')
+
+    def filename_to_name(self, filename):
+        return 0
+
+
+class SingleChairDataset(ShapeDataset):
+    single_id = True
+
+    def __init__(self):
+        super().__init__('data/chairs/single')
+
+    def filename_to_name(self, filename):
+        return 0
+
+
+class SphereCubeDataset(ShapeDataset):
+    rgb = True
+    single_id = True
+
+    def __init__(self):
+        super().__init__('data/spherecube')
+
+    def filename_to_name(self, filename):
+        return 0
 
 
 class CubeDataset(TensorDataset):
