@@ -99,7 +99,8 @@ class SemiSupervisedExperiment:
                     it + 1 == len(self.unlabelled_loader):
                 train_recon, train_kl, train_sup, *train_kls = \
                     np.mean(losses[-self.report_freq:], 0)
-                self.log.add_scalar('train_loss', train_recon + beta * train_kl,
+                self.log.add_scalar('train_loss',
+                                    train_recon + beta * train_kl + train_sup,
                                     global_it)
                 self.log.add_scalar('train_recon', train_recon, global_it)
                 self.log.add_scalar('train_kl', train_kl, global_it)
