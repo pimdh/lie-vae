@@ -45,10 +45,11 @@ class SemiSupervisedExperiment:
         self.selective_clip = selective_clip
         self.report_freq = report_freq
 
-    def test(self, loader):
+    def test(self):
         self.model.eval()
         losses = []
-        for it, (item_label, rot_label, img_label) in enumerate(loader):
+        for it, (item_label, rot_label, img_label) in \
+                enumerate(self.test_loader):
             img_label = img_label.to(device)
             recon, kl, kls = self.model.elbo(img_label, n=self.elbo_samples)
             losses.append((recon.mean().item(), kl.mean().item(),
@@ -108,7 +109,7 @@ class SemiSupervisedExperiment:
                     {'kl%d' % i: x for i, x in enumerate(train_kls)},
                     global_it)
 
-                test_recon, test_kl, *test_kls = self.test(self.test_loader)
+                test_recon, test_kl, *test_kls = self.test()
                 self.log.add_scalar('test_loss', test_recon + beta * test_kl,
                                     global_it)
                 self.log.add_scalar('test_recon', test_recon, global_it)
