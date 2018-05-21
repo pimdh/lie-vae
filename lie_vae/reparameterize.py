@@ -11,7 +11,7 @@ from torch.distributions.kl import kl_divergence
 from .utils import logsumexp, n2p, t2p
 from .lie_tools import rodrigues, map2LieAlgebra
 
-# from hyperspherical_vae_pytorch.distributions import VonMisesFisher, HypersphericalUniform
+from hyperspherical_vae_pytorch.distributions import VonMisesFisher, HypersphericalUniform
 
 class Nreparameterize(nn.Module):
 
