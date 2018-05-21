@@ -125,14 +125,12 @@ class N0Fullreparameterize(nn.Module):
         scale = F.softplus(self.scale_linear(x)) \
             .view(-1, self.z_dim, self.z_dim)
         zero_mean = x.new_zeros((x.shape[0], self.z_dim))
-        prior_scale = torch.diagflat(x.new_ones(self.z_dim))[None]
         self.distr = MultivariateNormal(zero_mean, scale_tril=scale)
-        self.prior = MultivariateNormal(zero_mean, scale_tril=prior_scale)
         self.z = self.nsample(n=n)
         return self.z
 
     def kl(self):
-        return kl_divergence(self.distr, self.prior)
+        return kl_divergence(self.distr, self.prior_distr())
 
     def log_posterior(self):
         return self._log_posterior(self.z)
@@ -141,7 +139,12 @@ class N0Fullreparameterize(nn.Module):
         return self.distr.log_prob(z)
 
     def log_prior(self):
-        return self.prior.log_prob(self.z)
+        return self.prior_distr().log_prob(self.z)
+
+    def prior_distr(self):
+        prior_scale = torch.diagflat(self.z.new_ones(self.z_dim))[None]
+        zero_mean = self.zeros_like(self.z)
+        return MultivariateNormal(zero_mean, scale_tril=prior_scale)
 
     def nsample(self, n=1):
         return self.distr.rsample((n,))
