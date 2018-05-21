@@ -6,7 +6,8 @@ import numpy as np
 from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, \
     ChairsDeconvNetUpsample, CubesConvNetBN, ChairsConvNetBN
 from .decoders import MLPNet, ActionNet
-from .reparameterize import  SO3reparameterize, N0reparameterize, Nreparameterize, Sreparameterize
+from .reparameterize import  SO3reparameterize, N0reparameterize, \
+    Nreparameterize, Sreparameterize, N0Fullreparameterize
 from .lie_tools import group_matrix_to_eazyz, vector_to_eazyz
 from .utils import logsumexp, tensor_slicer
 
@@ -85,6 +86,10 @@ class CubeVAE(VAE):
                 self.rep0 = SO3reparameterize(N0reparameterize(ndf * 4, z_dim=3), k=10)
                 self.reparameterize = [self.rep0]
                 self.decoder = MLPNet(in_dims=9, degrees=6, rep_copies=100, deconv=deconv)
+            elif self.latent_mode == "so3f":
+                self.rep0 = SO3reparameterize(N0Fullreparameterize(ndf * 4, z_dim=3), k=10)
+                self.reparameterize = [self.rep0]
+                self.decoder = MLPNet(in_dims=9, degrees=6, rep_copies=100, deconv=deconv)
             elif self.latent_mode == "normal":
                 self.rep0 = Nreparameterize(ndf * 4, 3)
                 self.reparameterize = [self.rep0]
@@ -116,7 +121,7 @@ class CubeVAE(VAE):
         z_pose_ = z_pose.view(-1, *z_pose.shape[2:])
 
         if self.decoder_mode == "action":
-            if self.latent_mode == "so3":
+            if self.latent_mode == "so3" or self.latent_mode == 'so3f':
                 angles = group_matrix_to_eazyz(z_pose_)
             elif self.latent_mode == "normal":
                 angles = vector_to_eazyz(z_pose_)
@@ -172,6 +177,10 @@ class ChairsVAE(VAE):
             self.rep_group = SO3reparameterize(
                 N0reparameterize(group_reparam_in_dims, z_dim=3), k=10)
             group_dims = 9
+        elif self.latent_mode == 'so3f':
+            self.rep_group = SO3reparameterize(
+                N0Fullreparameterize(group_reparam_in_dims, z_dim=3), k=10)
+            group_dims = 9
         elif self.latent_mode == 'normal':
             self.rep_group = Nreparameterize(group_reparam_in_dims, 3)
             group_dims = 3
@@ -224,7 +233,7 @@ class ChairsVAE(VAE):
             z_content = z_content.view(-1, *z_content.shape[2:])
 
         if self.decoder_mode == "action":
-            if self.latent_mode == "so3":
+            if self.latent_mode == "so3" or self.latent_mode == 'so3f':
                 angles = group_matrix_to_eazyz(z_pose)
             elif self.latent_mode == "normal":
                 angles = vector_to_eazyz(z_pose)

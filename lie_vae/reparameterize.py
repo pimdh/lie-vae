@@ -5,7 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from torch.distributions import Normal
+from torch.distributions import Normal, MultivariateNormal
+from torch.distributions.kl import kl_divergence
 
 from .utils import logsumexp, n2p, t2p
 from .lie_tools import rodrigues, map2LieAlgebra
@@ -110,6 +111,40 @@ class N0reparameterize(nn.Module):
     def nsample(self, n=1):
         eps = Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).sample((n,))
         return eps * self.sigma
+
+
+class N0Fullreparameterize(nn.Module):
+    """Zero mean Gaussian with full covariance matrix."""
+    def __init__(self, input_dim, z_dim):
+        super().__init__()
+        self.input_dim = input_dim
+        self.z_dim = z_dim
+        self.scale_linear = nn.Linear(input_dim, z_dim*z_dim)
+
+    def forward(self, x, n=1):
+        scale = F.softplus(self.scale_linear(x)) \
+            .view(-1, self.z_dim, self.z_dim)
+        zero_mean = x.new_zeros((x.shape[0], self.z_dim))
+        prior_scale = torch.diagflat(x.new_ones(self.z_dim))[None]
+        self.distr = MultivariateNormal(zero_mean, scale_tril=scale)
+        self.prior = MultivariateNormal(zero_mean, scale_tril=prior_scale)
+        self.z = self.nsample(n=n)
+        return self.z
+
+    def kl(self):
+        return kl_divergence(self.distr, self.prior)
+
+    def log_posterior(self):
+        return self._log_posterior(self.z)
+
+    def _log_posterior(self, z):
+        return self.distr.log_prob(z)
+
+    def log_prior(self):
+        return self.prior.log_prob(self.z)
+
+    def nsample(self, n=1):
+        return self.distr.rsample((n,))
 
 
 class SO3reparameterize(nn.Module):
