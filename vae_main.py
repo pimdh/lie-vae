@@ -17,6 +17,10 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 def main():
     args = parse_args()
     pprint(vars(args))
+    if args.name is not None:
+        args.log_dir = 'runs/'+args.name
+        args.save_dir = 'outputs/'+args.name
+
     log = SummaryWriter(args.log_dir)
 
     if args.dataset == 'objects':
@@ -128,6 +132,7 @@ def parse_args():
     parser.add_argument('--elbo_samples', type=int, default=1)
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
+    parser.add_argument('--name')
     parser.add_argument('--continue_epoch', type=int, default=0)
     parser.add_argument('--semi_labelled', type=int, default=100,
                         help='Number of labelled samples')
