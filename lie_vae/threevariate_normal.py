@@ -5,15 +5,15 @@ from torch.distributions.multivariate_normal import MultivariateNormal, \
     _batch_diag, _batch_potrf_lower, _batch_inverse
 
 
-def _three_dim_tril_inverse(L, eps=1E-10):
+def _three_dim_tril_inverse(L):
     """Compute three dim lower triag inverse batch-wise."""
     inv = torch.zeros_like(L)
     i = torch.arange(3, dtype=torch.long, device=L.device)
-    inv[..., i, i] = 1 / (L[..., i, i] + eps)
-    inv[..., 1, 0] = -L[..., 1, 0] / (L[..., 0, 0] * L[..., 1, 1] + eps)
-    inv[..., 2, 1] = -L[..., 2, 1] / (L[..., 2, 2] * L[..., 1, 1] + eps)
+    inv[..., i, i] = 1 / L[..., i, i]
+    inv[..., 1, 0] = -L[..., 1, 0] / (L[..., 0, 0] * L[..., 1, 1])
+    inv[..., 2, 1] = -L[..., 2, 1] / (L[..., 2, 2] * L[..., 1, 1])
     inv[..., 2, 0] = (L[..., 1, 0] * L[..., 2, 1] - L[..., 2, 0] * L[..., 1, 1]) \
-                     / (L[..., 2, 2] * L[..., 1, 1] * L[..., 0, 0] + eps)
+                     / (L[..., 2, 2] * L[..., 1, 1] * L[..., 0, 0])
     return inv
 
 
@@ -77,7 +77,7 @@ def test_threevariate_normal():
     inverses_a = _batch_inverse(scales)
     inverses_b = three_dim_tril_inverse(scales)
 
-    np.testing.assert_allclose(inverses_a.detach(), inverses_b.detach(), atol=1E-6, rtol=1E-6)
+    np.testing.assert_allclose(inverses_a.detach(), inverses_b.detach(), atol=1E-7, rtol=1E-7)
 
     locs = torch.randn(10, 10, 3, dtype=torch.float32) * 0.1
     vals = torch.randn(5, 10, 10, 3, dtype=torch.float32) * 0.1
@@ -92,8 +92,8 @@ def test_threevariate_normal():
     grad_b = torch.autograd.grad(log_prob_b.mean(), scales, retain_graph=True)[0]
     time_b = time()-start
 
-    np.testing.assert_allclose(log_prob_b.detach(), log_prob_a.detach(), atol=1E-6, rtol=1E-6)
-    np.testing.assert_allclose(grad_b.detach(), grad_a.detach(), atol=1E-3, rtol=1E-3)
+    np.testing.assert_allclose(log_prob_b.detach(), log_prob_a.detach(), atol=1E-7, rtol=1E-7)
+    np.testing.assert_allclose(grad_b.detach(), grad_a.detach(), atol=1E-3, rtol=1E-4)
 
     print(time_a, time_b)
 
