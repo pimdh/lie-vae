@@ -5,11 +5,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from torch.distributions import Normal, MultivariateNormal
+from torch.distributions import Normal
 from torch.distributions.kl import kl_divergence
 
 from .utils import logsumexp, n2p, t2p
 from .lie_tools import rodrigues, map2LieAlgebra
+from .threevariate_normal import ThreevariateNormal
 
 from hyperspherical_vae_pytorch.distributions import VonMisesFisher, HypersphericalUniform
 
@@ -124,8 +125,11 @@ class N0Fullreparameterize(nn.Module):
     def forward(self, x, n=1):
         scale = F.softplus(self.scale_linear(x)) \
             .view(-1, self.z_dim, self.z_dim)
+        # Make lower triangular
+        scale = scale * x.new_ones(self.z_dim, self.z_dim).tril()
+
         zero_mean = x.new_zeros((x.shape[0], self.z_dim))
-        self.distr = MultivariateNormal(zero_mean, scale_tril=scale)
+        self.distr = ThreevariateNormal(zero_mean, scale_tril=scale)
         self.z = self.nsample(n=n)
         return self.z
 
@@ -142,9 +146,9 @@ class N0Fullreparameterize(nn.Module):
         return self.prior_distr().log_prob(self.z)
 
     def prior_distr(self):
-        prior_scale = torch.diagflat(self.z.new_ones(self.z_dim))[None]
+        prior_scale = torch.eye(self.z_dim, device=self.z.device)[None]
         zero_mean = self.zeros_like(self.z)
-        return MultivariateNormal(zero_mean, scale_tril=prior_scale)
+        return ThreevariateNormal(zero_mean, scale_tril=prior_scale)
 
     def nsample(self, n=1):
         return self.distr.rsample((n,))
