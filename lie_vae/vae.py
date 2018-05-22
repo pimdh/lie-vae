@@ -4,7 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 
 from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, \
-    ChairsDeconvNetUpsample, CubesConvNetBN, ChairsConvNetBN
+    ChairsDeconvNetUpsample, CubesConvNetBN, ChairsConvNetBN, ChairsDeconvNet4, \
+    ChairsDeconvNet8
 from .decoders import MLPNet, ActionNet
 from .reparameterize import  SO3reparameterize, N0reparameterize, \
     Nreparameterize, Sreparameterize, N0Fullreparameterize
@@ -202,6 +203,10 @@ class ChairsVAE(VAE):
         matrix_dims = (degrees + 1) ** 2
         if deconv_mode == 'deconv':
             deconv = ChairsDeconvNet(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
+        elif deconv_mode == 'deconv4':
+            deconv = ChairsDeconvNet4(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
+        elif deconv_mode == 'deconv8':
+            deconv = ChairsDeconvNet8(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
         elif deconv_mode == 'upsample':
             deconv = ChairsDeconvNetUpsample(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
         else:
