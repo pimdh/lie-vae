@@ -30,17 +30,17 @@ def map2LieAlgebra(v):
     # make sure this is a sample from R^3
     assert v.size()[-1] == 3
 
-    R_x = torch.tensor([[ 0., 0., 0.],
+    R_x = v.new_tensor([[ 0., 0., 0.],
                         [ 0., 0.,-1.],
-                        [ 0., 1., 0.]], device=v.device)
+                        [ 0., 1., 0.]])
 
-    R_y = torch.tensor([[ 0., 0., 1.],
+    R_y = v.new_tensor([[ 0., 0., 1.],
                         [ 0., 0., 0.],
-                        [-1., 0., 0.]], device=v.device)
+                        [-1., 0., 0.]])
 
-    R_z = torch.tensor([[ 0.,-1., 0.],
+    R_z = v.new_tensor([[ 0.,-1., 0.],
                         [ 1., 0., 0.],
-                        [ 0., 0., 0.]], device=v.device)
+                        [ 0., 0., 0.]])
 
     R = R_x * v[..., 0, None, None] + \
         R_y * v[..., 1, None, None] + \
@@ -63,18 +63,17 @@ def rodrigues(v):
     # normalize K
     K = map2LieAlgebra(v/theta)
 
-    I = torch.eye(3, device=v.device)
+    I = torch.eye(3, device=v.device, dtype=v.dtype)
     R = I + torch.sin(theta)[..., None]*K \
         + (1. - torch.cos(theta))[..., None]*(K@K)
-    a = torch.sin(theta)[..., None]
     return R
 
 
 def vector_to_eazyz(v):
     """Map 3 vector to euler angles."""
     angles = F.tanh(v)
-    angles = angles * torch.tensor([math.pi, math.pi / 2, math.pi], device=v.device)
-    angles = angles + torch.tensor([0, math.pi / 2, 0], device=v.device)
+    angles = angles * v.new_tensor([math.pi, math.pi / 2, math.pi])
+    angles = angles + v.new_tensor([0, math.pi / 2, 0])
     return angles
 
 
@@ -153,10 +152,20 @@ def group_matrix_to_eazyz(r):
     return quaternions_to_eazyz(group_matrix_to_quaternions(r))
 
 
+def quaternions_to_group_matrix(q):
+    """Normalises q and maps to group matrix."""
+    q = q / q.norm(p=2, dim=-1, keepdim=True)
+    r, i, j, k = q[..., 0], q[..., 1], q[..., 2], q[..., 3]
+
+    return torch.stack([
+        r*r - i*i - j*j + k*k, 2*(r*i + j*k), 2*(r*j - i*k),
+        2*(r*i - j*k), -r*r + i*i - j*j + k*k, 2*(i*j + r*k),
+        2*(r*j + i*k), 2*(i*j - r*k), -r*r - i*i + j*j + k*k
+    ], -1).view(*q.shape[:-1], 3, 3)
+
+
 def _z_rot_mat(angle, l):
-    m = torch.zeros(
-        (angle.size(0), 2 * l + 1, 2 * l + 1),
-        dtype=torch.float32, device=angle.device)
+    m = angle.new_zeros((angle.size(0), 2 * l + 1, 2 * l + 1))
 
     inds = torch.arange(
         0, 2 * l + 1, 1, dtype=torch.long, device=angle.device)
@@ -164,7 +173,7 @@ def _z_rot_mat(angle, l):
         2 * l, -1, -1, dtype=torch.long, device=angle.device)
 
     frequencies = torch.arange(
-        l, -l - 1, -1, dtype=torch.float32, device=angle.device)[None]
+        l, -l - 1, -1, dtype=angle.dtype, device=angle.device)[None]
 
     m[:, inds, reversed_inds] = torch.sin(frequencies * angle[:, None])
     m[:, inds, inds] = torch.cos(frequencies * angle[:, None])
@@ -209,7 +218,7 @@ def block_wigner_matrix_multiply(angles, data, max_degree):
 
 # Tests
 def test_algebra_maps():
-    vs = torch.randn(100, 3)
+    vs = torch.randn(100, 3).double()
     matrices = map2LieAlgebra(vs)
     vs_prime = map2LieVector(matrices)
     matrices_prime = map2LieAlgebra(vs_prime)
@@ -220,7 +229,7 @@ def test_algebra_maps():
 
 def test_log_exp(scale, error):
     for _ in range(50):
-        v_start = torch.randn(3) * scale
+        v_start = torch.randn(3).double() * scale
         R = rodrigues(v_start)
         v = map2LieVector(log_map(R))
         R_prime = rodrigues(v)
@@ -233,15 +242,25 @@ def test_log_exp(scale, error):
 
 def test_coordinate_changes():
     r = torch.stack(
-        [torch.tensor(randomR(), dtype=torch.float32) for _ in range(10000)], 0)
+        [torch.tensor(randomR(), dtype=torch.float64) for _ in range(10000)], 0)
 
     q_reference = SO3_coordinates(r.numpy().astype(np.float64), 'MAT', 'Q')
     q = group_matrix_to_quaternions(r)
-    np.testing.assert_allclose(q, q_reference, rtol=1E-5, atol=1E-5)
+    np.testing.assert_allclose(q, q_reference, rtol=1E-6, atol=1E-6)
+
+    r_back = quaternions_to_group_matrix(q)
+    r_back_ref = SO3_coordinates(q.numpy().astype(np.float64), 'Q', 'MAT')
+    np.testing.assert_allclose(r_back, r, rtol=1E-6, atol=1E-6)
+    np.testing.assert_allclose(r_back, r_back_ref, rtol=1E-6, atol=1E-6)
+
+    q_rand = torch.randn(100000, 4, dtype=torch.float64)
+    r = quaternions_to_group_matrix(q_rand)
+    r_ref = SO3_coordinates(q_rand.numpy().astype(np.float64), 'Q', 'MAT')
+    np.testing.assert_allclose(r, r_ref, rtol=1E-6, atol=1E-6)
 
     ea_reference = SO3_coordinates(q.numpy().astype(np.float64), 'Q', 'EA323')
     ea = quaternions_to_eazyz(q).remainder(2*np.pi)
-    np.testing.assert_allclose(ea, ea_reference, rtol=1E-5, atol=1E-5)
+    np.testing.assert_allclose(ea, ea_reference, rtol=2E-5, atol=2E-5)
 
 
 def test_wigner_d_matrices():
@@ -261,8 +280,8 @@ def test_wigner_d_matrices():
 
 if __name__ == '__main__':
     test_algebra_maps()
-    test_log_exp(0.1, 1E-4)
-    test_log_exp(10, 5E-4)
+    test_log_exp(0.1, 1E-6)
+    test_log_exp(10, 1E-6)
     test_coordinate_changes()
     test_wigner_d_matrices()
 

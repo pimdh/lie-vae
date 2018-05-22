@@ -52,7 +52,8 @@ def main():
         deconv_hidden=args.deconv_hidden,
         batch_norm=args.batch_norm,
         rgb=dataset.rgb,
-        single_id=dataset.single_id
+        single_id=dataset.single_id,
+        quaternion_mean=args.quaternion_mean
     ).to(device)
 
     if args.continue_epoch > 0:
@@ -130,6 +131,7 @@ def parse_args():
     parser.add_argument('--clip_grads', type=float, default=1E-5)
     parser.add_argument('--selective_clip', action='store_true')
     parser.add_argument('--elbo_samples', type=int, default=1)
+    parser.add_argument('--quaternion_mean', action='store_true')
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
     parser.add_argument('--name')

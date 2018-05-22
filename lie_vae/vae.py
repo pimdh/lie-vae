@@ -156,7 +156,8 @@ class ChairsVAE(VAE):
             rep_copies=10,
             batch_norm=True,
             rgb=False,
-            single_id=False
+            single_id=False,
+            quaternion_mean=False
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()
@@ -176,11 +177,13 @@ class ChairsVAE(VAE):
         # Setup latent space
         if self.latent_mode == 'so3':
             self.rep_group = SO3reparameterize(
-                N0reparameterize(group_reparam_in_dims, z_dim=3), k=10)
+                N0reparameterize(group_reparam_in_dims, z_dim=3), k=10,
+                quaternion_mean=quaternion_mean)
             group_dims = 9
         elif self.latent_mode == 'so3f':
             self.rep_group = SO3reparameterize(
-                N0Fullreparameterize(group_reparam_in_dims, z_dim=3), k=10)
+                N0Fullreparameterize(group_reparam_in_dims, z_dim=3), k=10,
+                quaternion_mean=quaternion_mean)
             group_dims = 9
         elif self.latent_mode == 'normal':
             self.rep_group = Nreparameterize(group_reparam_in_dims, 3)

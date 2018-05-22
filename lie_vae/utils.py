@@ -65,10 +65,9 @@ def deg2coo(x):
 def randomR():
     """For proof, see https://math.stackexchange.com/a/138837/243884"""
     q, r = np.linalg.qr(np.random.normal(size=(3, 3)))
-    r = np.diag(r)
-    # TODO: What's going on here??
-    ret = q @ np.diag(r / np.abs(r))
-    return ret * np.linalg.det(ret)
+    # r = np.diag(r)
+    # ret = q @ np.diag(r / np.abs(r))
+    return q * np.linalg.det(q)
 
 def canonicalShape(letter='L', size=6):
     a = np.pi / size
