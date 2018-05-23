@@ -175,15 +175,15 @@ class QuaternionMean(nn.Module):
 class S2S1Mean(nn.Module):
     def __init__(self, input_dims):
         super().__init__()
-        self.s2map = nn.Linear(input_dims, 3)
-        self.s1map = nn.Linear(input_dims, 2)
+        self.s2_map = nn.Linear(input_dims, 3)
+        self.s1_map = nn.Linear(input_dims, 2)
 
     def forward(self, x):
         s2_el = self.s2_map(x)
-        s2_el /= s2_el.norm(p=2, dim=-1, keepdim=True)
+        s2_el = s2_el/s2_el.norm(p=2, dim=-1, keepdim=True)
         
         s1_el = self.s1_map(x)
-        s1_el /= s1_el.norm(p=2, dim=-1, keepdim=True)
+        s1_el = s1_el/s1_el.norm(p=2, dim=-1, keepdim=True)
         
         return s2s1rodrigues(s2_el, s1_el)
     
