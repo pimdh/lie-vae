@@ -9,7 +9,7 @@ from torch.distributions import Normal
 from torch.distributions.kl import kl_divergence
 
 from .utils import logsumexp, n2p, t2p
-from .lie_tools import rodrigues, map2LieAlgebra, quaternions_to_group_matrix
+from .lie_tools import rodrigues, map2LieAlgebra, quaternions_to_group_matrix, s2s1rodrigues
 from .threevariate_normal import ThreevariateNormal
 
 from hyperspherical_vae_pytorch.distributions import VonMisesFisher, HypersphericalUniform
@@ -170,7 +170,22 @@ class QuaternionMean(nn.Module):
 
     def forward(self, x):
         return quaternions_to_group_matrix(self.map(x))
+    
+class S2S1Mean(nn.Module):
+    def __init__(self, input_dims):
+        super().__init__()
+        self.s2map = nn.Linear(input_dims, 3)
+        self.s1map = nn.Linear(input_dims, 2)
 
+    def forward(self, x):
+        s2_el = self.s2_map(x)
+        s2_el /= s2_el.norm(p=2, dim=-1, keepdim=True)
+        
+        s1_el = self.s1_map(x)
+        s1_el /= s1_el.norm(p=2, dim=-1, keepdim=True)
+        
+        return s2s1rodrigues(s2_el, s1_el)
+    
 
 class SO3reparameterize(nn.Module):
     def __init__(self, reparameterize, mean_module, k=10):

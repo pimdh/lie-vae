@@ -68,6 +68,20 @@ def rodrigues(v):
         + (1. - torch.cos(theta))[..., None]*(K@K)
     return R
 
+def s2s1rodrigues(s2_el, s1_el):
+    
+    K = map2LieAlgebra(s2_el)
+    
+    cos_theta = s1_el[...,0]
+    sin_theta = s1_el[...,1]
+    
+    I = torch.eye(3, device=s2_el.device, dtype=s2_el.dtype)
+    
+    R = I + sin_theta[..., None, None]*K \
+        + (1. - cos_theta)[..., None, None]*(K@K)
+        
+    return R
+
 
 def vector_to_eazyz(v):
     """Map 3 vector to euler angles."""
@@ -282,9 +296,35 @@ def test_wigner_d_matrices():
         matrices = wigner_d_matrix(angles, l)
 
         np.testing.assert_allclose(matrices, reference, rtol=1E-4, atol=1E-5)
+        
+def test_s2s1rodrigues(error):
+    n = 10000
+    s2_el = torch.tensor(np.random.normal(0,1, (n,3)), dtype = torch.float32)
+    s2_el /= s2_el.norm(p=2, dim=-1, keepdim=True)
+    
+    s1_el = torch.tensor(np.random.normal(0,1, (n,2)), dtype = torch.float32)
+    s1_el /= s1_el.norm(p=2, dim=-1, keepdim=True)
+    
+    R = s2s1rodrigues(s2_el, s1_el).detach().numpy()
+    R_T = R.transpose([0,2,1])
+    
+    det = np.linalg.det(R)
+    ones = np.ones_like(det)
+    
+    I = np.repeat(np.identity(3)[None,...], n, 0)
+    
+    np.testing.assert_allclose(I, R@R_T, rtol=error, atol=error)
+    np.testing.assert_allclose(ones, det, rtol=error, atol=error)
+    print("test_s2s1rodrigues with {} elements and {} error passed".format(n, error))
+    
+    
+    
+    
+    
 
 
 if __name__ == '__main__':
+    test_s2s1rodrigues(1E-5)
     test_algebra_maps()
     test_log_exp(0.1, 1E-6)
     test_log_exp(10, 1E-6)
