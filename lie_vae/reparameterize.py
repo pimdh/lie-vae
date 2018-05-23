@@ -11,6 +11,7 @@ from torch.distributions.kl import kl_divergence
 from .utils import logsumexp, n2p, t2p
 from .lie_tools import rodrigues, map2LieAlgebra, quaternions_to_group_matrix
 from .threevariate_normal import ThreevariateNormal
+from .functions.qr import qr_batched3
 
 from hyperspherical_vae_pytorch.distributions import VonMisesFisher, HypersphericalUniform
 
@@ -170,6 +171,15 @@ class QuaternionMean(nn.Module):
 
     def forward(self, x):
         return quaternions_to_group_matrix(self.map(x))
+
+
+class QRMean(nn.Module):
+    def __init__(self, input_dims):
+        super().__init__()
+        self.map = nn.Linear(input_dims, 9)
+
+    def forward(self, x):
+        return qr_batched3(self.map(x).view(-1, 3, 3))[0]
 
 
 class SO3reparameterize(nn.Module):

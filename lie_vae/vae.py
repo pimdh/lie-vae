@@ -8,7 +8,8 @@ from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, 
     ChairsDeconvNet8
 from .decoders import MLPNet, ActionNet
 from .reparameterize import  SO3reparameterize, N0reparameterize, \
-    Nreparameterize, Sreparameterize, N0Fullreparameterize, AlgebraMean, QuaternionMean
+    Nreparameterize, Sreparameterize, N0Fullreparameterize, \
+    AlgebraMean, QuaternionMean, QRMean
 from .lie_tools import group_matrix_to_eazyz, vector_to_eazyz
 from .utils import logsumexp, tensor_slicer
 
@@ -91,6 +92,8 @@ class CubeVAE(VAE):
                 mean_module = AlgebraMean(ndf * 4)
             elif mean_mode == 'q':
                 mean_module = QuaternionMean(ndf * 4)
+            elif mean_mode == 'qr':
+                mean_module = QRMean(ndf * 4)
             else:
                 raise ValueError('Wrong mean mode')
 
@@ -165,7 +168,7 @@ class ChairsVAE(VAE):
         self.latent_mode = latent_mode
         self.decoder_mode = decoder_mode
 
-        group_reparam_in_dims = 10
+        group_reparam_in_dims = 15
         content_reparam_in_dims = 0 if single_id else content_dims
         if batch_norm:
             self.encoder = ChairsConvNetBN(
@@ -185,6 +188,8 @@ class ChairsVAE(VAE):
                 mean_module = AlgebraMean(group_reparam_in_dims)
             elif mean_mode == 'q':
                 mean_module = QuaternionMean(group_reparam_in_dims)
+            elif mean_mode == 'qr':
+                mean_module = QRMean(group_reparam_in_dims)
             else:
                 raise ValueError('Wrong mean mode')
 
