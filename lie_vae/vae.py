@@ -8,7 +8,7 @@ from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, 
     ChairsDeconvNet8
 from .decoders import MLPNet, ActionNet
 from .reparameterize import  SO3reparameterize, N0reparameterize, \
-    Nreparameterize, Sreparameterize, N0Fullreparameterize, AlgebraMean, QuaternionMean
+    Nreparameterize, Sreparameterize, N0Fullreparameterize, AlgebraMean, QuaternionMean, S2S1Mean
 from .lie_tools import group_matrix_to_eazyz, vector_to_eazyz
 from .utils import logsumexp, tensor_slicer
 
@@ -91,6 +91,8 @@ class CubeVAE(VAE):
                 mean_module = AlgebraMean(ndf * 4)
             elif mean_mode == 'q':
                 mean_module = QuaternionMean(ndf * 4)
+            elif mean_mode == 's2s1':
+                mean_module = S2S1Mean(ndf * 4)
             else:
                 raise ValueError('Wrong mean mode')
 
@@ -185,6 +187,8 @@ class ChairsVAE(VAE):
                 mean_module = AlgebraMean(group_reparam_in_dims)
             elif mean_mode == 'q':
                 mean_module = QuaternionMean(group_reparam_in_dims)
+            elif mean_mode == 's2s1':
+                mean_module = S2S1Mean(ndf * 4)
             else:
                 raise ValueError('Wrong mean mode')
 
