@@ -258,6 +258,12 @@ def test_coordinate_changes():
     r_ref = SO3_coordinates(q_rand.numpy().astype(np.float64), 'Q', 'MAT')
     np.testing.assert_allclose(r, r_ref, rtol=1E-6, atol=1E-6)
 
+    np.testing.assert_allclose(
+        r @ r.transpose(-2, -1), torch.eye(3).expand(r.shape[0], -1, -1),
+        atol=1E-6)
+    np.testing.assert_allclose(torch.stack([x.det() for x in r]),
+                               torch.ones(r.shape[0]))
+
     ea_reference = SO3_coordinates(q.numpy().astype(np.float64), 'Q', 'EA323')
     ea = quaternions_to_eazyz(q).remainder(2*np.pi)
     np.testing.assert_allclose(ea, ea_reference, rtol=2E-5, atol=2E-5)
