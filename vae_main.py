@@ -45,6 +45,7 @@ def main():
     model = ChairsVAE(
         content_dims=args.content_dims,
         latent_mode=args.latent_mode,
+        mean_mode=args.mean_mode,
         decoder_mode=args.decoder_mode,
         deconv_mode=args.deconv_mode,
         rep_copies=args.rep_copies,
@@ -52,8 +53,7 @@ def main():
         deconv_hidden=args.deconv_hidden,
         batch_norm=args.batch_norm,
         rgb=dataset.rgb,
-        single_id=dataset.single_id,
-        quaternion_mean=args.quaternion_mean
+        single_id=dataset.single_id
     ).to(device)
 
     if args.continue_epoch > 0:
@@ -110,7 +110,8 @@ def parse_args():
     parser.add_argument('--decoder_mode', required=True,
                         help='[action, mlp]')
     parser.add_argument('--latent_mode', required=True,
-                        help='[so3, normal]')
+                        help='[so3, so3f, normal]')
+    parser.add_argument('--mean_mode', default='alg', help='For SO(3). Choose [q, alg]')
     parser.add_argument('--experiment', default='unsupervised',
                         help='[unsupervised, semi]')
     parser.add_argument('--deconv_mode', default='deconv',
@@ -131,7 +132,6 @@ def parse_args():
     parser.add_argument('--clip_grads', type=float, default=1E-5)
     parser.add_argument('--selective_clip', action='store_true')
     parser.add_argument('--elbo_samples', type=int, default=1)
-    parser.add_argument('--quaternion_mean', action='store_true')
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
     parser.add_argument('--name')

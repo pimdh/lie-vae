@@ -8,7 +8,7 @@ from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, 
     ChairsDeconvNet8
 from .decoders import MLPNet, ActionNet
 from .reparameterize import  SO3reparameterize, N0reparameterize, \
-    Nreparameterize, Sreparameterize, N0Fullreparameterize
+    Nreparameterize, Sreparameterize, N0Fullreparameterize, AlgebraMean, QuaternionMean
 from .lie_tools import group_matrix_to_eazyz, vector_to_eazyz
 from .utils import logsumexp, tensor_slicer
 
@@ -70,7 +70,7 @@ class VAE(nn.Module):
 
 
 class CubeVAE(VAE):
-    def __init__(self, decoder_mode, latent_mode, batch_norm=False):
+    def __init__(self, decoder_mode, latent_mode, mean_mode='alg', batch_norm=False):
         super().__init__()
         self.decoder_mode = decoder_mode
         self.latent_mode = latent_mode
@@ -81,40 +81,40 @@ class CubeVAE(VAE):
         else:
             self.encoder = CubesConvNet()
 
-        if self.decoder_mode == "mlp":
+        if self.latent_mode == 'so3' or self.latent_mode == 'so3f':
+            if self.latent_mode == 'so3':
+                normal = N0reparameterize(ndf * 4, z_dim=3)
+            else:
+                normal = N0Fullreparameterize(ndf * 4, z_dim=3)
+
+            if mean_mode == 'alg':
+                mean_module = AlgebraMean(ndf * 4)
+            elif mean_mode == 'q':
+                mean_module = QuaternionMean(ndf * 4)
+            else:
+                raise ValueError('Wrong mean mode')
+
+            self.rep0 = SO3reparameterize(normal, mean_module, k=10)
+            group_dims = 9
+        elif self.latent_mode == 'normal':
+            self.rep0 = Nreparameterize(ndf * 4, 3)
+            group_dims = 3
+        elif self.latent_mode == 'vmf':
+            self.rep0 = Sreparameterize(ndf * 4, 4)
+            group_dims = 4
+        else:
+            raise ValueError('Wrong latent mode')
+
+        if self.decoder_mode == 'mlp':
             deconv = CubesDeconvNet((6 + 1) ** 2 * 100, 50)
-            if self.latent_mode == "so3":
-                self.rep0 = SO3reparameterize(N0reparameterize(ndf * 4, z_dim=3), k=10)
-                self.reparameterize = [self.rep0]
-                self.decoder = MLPNet(in_dims=9, degrees=6, rep_copies=100, deconv=deconv)
-            elif self.latent_mode == "so3f":
-                self.rep0 = SO3reparameterize(N0Fullreparameterize(ndf * 4, z_dim=3), k=10)
-                self.reparameterize = [self.rep0]
-                self.decoder = MLPNet(in_dims=9, degrees=6, rep_copies=100, deconv=deconv)
-            elif self.latent_mode == "normal":
-                self.rep0 = Nreparameterize(ndf * 4, 3)
-                self.reparameterize = [self.rep0]
-                self.decoder = MLPNet(in_dims=3, degrees=6, rep_copies=100, deconv=deconv)
-            elif self.latent_mode == "vmf":
-                self.rep0 = Sreparameterize(ndf * 4, 4)
-                self.reparameterize = [self.rep0]
-                self.decoder = MLPNet(in_dims=4, degrees=6, rep_copies=100, deconv=deconv)
-                
-        elif self.decoder_mode == "action":
-            if self.latent_mode == "so3":
-                self.rep0 = SO3reparameterize(N0reparameterize(ndf * 4, z_dim=3), k=10)
-                self.reparameterize = [self.rep0]
-            elif self.latent_mode == "normal":
-                self.rep0 = Nreparameterize(ndf * 4, 3)
-                self.reparameterize = [self.rep0]
-            elif self.latent_mode == "vmf":
-                self.rep0 = Sreparameterize(ndf * 4, 4)
-                self.reparameterize = [self.rep0]
-                
+            self.decoder = MLPNet(in_dims=group_dims, degrees=6, rep_copies=100, deconv=deconv)
+        elif self.decoder_mode == 'action':
             deconv = CubesDeconvNet((6 + 1) ** 2 * 10, 50)
             self.decoder = ActionNet(6, rep_copies=10, with_mlp=True, deconv=deconv)
         else:
-            raise RuntimeError()
+            raise ValueError('Wrong decoder mode')
+
+        self.reparameterize = [self.rep0]
 
     def forward(self, x, n=1):
         z_list = self.encode(x, n=n)
@@ -157,7 +157,7 @@ class ChairsVAE(VAE):
             batch_norm=True,
             rgb=False,
             single_id=False,
-            quaternion_mean=False
+            mean_mode='alg'
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()
@@ -175,21 +175,26 @@ class ChairsVAE(VAE):
                 group_reparam_in_dims + content_reparam_in_dims, rgb=rgb)
 
         # Setup latent space
-        if self.latent_mode == 'so3':
-            self.rep_group = SO3reparameterize(
-                N0reparameterize(group_reparam_in_dims, z_dim=3), k=10,
-                quaternion_mean=quaternion_mean)
-            group_dims = 9
-        elif self.latent_mode == 'so3f':
-            self.rep_group = SO3reparameterize(
-                N0Fullreparameterize(group_reparam_in_dims, z_dim=3), k=10,
-                quaternion_mean=quaternion_mean)
+        if self.latent_mode == 'so3' or self.latent_mode == 'so3f':
+            if self.latent_mode == 'so3':
+                normal = N0reparameterize(group_reparam_in_dims, z_dim=3)
+            else:
+                normal = N0Fullreparameterize(group_reparam_in_dims, z_dim=3)
+
+            if mean_mode == 'alg':
+                mean_module = AlgebraMean(group_reparam_in_dims)
+            elif mean_mode == 'q':
+                mean_module = QuaternionMean(group_reparam_in_dims)
+            else:
+                raise ValueError('Wrong mean mode')
+
+            self.rep_group = SO3reparameterize(normal, mean_module, k=10)
             group_dims = 9
         elif self.latent_mode == 'normal':
             self.rep_group = Nreparameterize(group_reparam_in_dims, 3)
             group_dims = 3
         else:
-            raise RuntimeError()
+            raise ValueError('Wrong latent mode')
 
         if single_id:
             self.reparameterize = nn.ModuleList([self.rep_group])

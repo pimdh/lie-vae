@@ -154,17 +154,33 @@ class N0Fullreparameterize(nn.Module):
         return self.distr.rsample((n,))
 
 
+class AlgebraMean(nn.Module):
+    def __init__(self, input_dims):
+        super().__init__()
+        self.map = nn.Linear(input_dims, 3)
+
+    def forward(self, x):
+        return rodrigues(self.map(x))
+
+
+class QuaternionMean(nn.Module):
+    def __init__(self, input_dims):
+        super().__init__()
+        self.map = nn.Linear(input_dims, 4)
+
+    def forward(self, x):
+        return quaternions_to_group_matrix(self.map(x))
+
+
 class SO3reparameterize(nn.Module):
-    def __init__(self, reparameterize, k=10, quaternion_mean=False):
+    def __init__(self, reparameterize, mean_module, k=10):
         super(SO3reparameterize, self).__init__()
-            
+
+        self.mean_module = mean_module
         self.reparameterize = reparameterize
         self.input_dim = self.reparameterize.input_dim
         assert self.reparameterize.z_dim == 3
         self.k = k
-
-        self.quaternion_mean = quaternion_mean
-        self.mu_linear = nn.Linear(self.input_dim, 4 if quaternion_mean else 3)
 
     @staticmethod
     def _lieAlgebra(v):
@@ -181,7 +197,7 @@ class SO3reparameterize(nn.Module):
         return rodrigues(v)
 
     def forward(self, x, n=1):
-        self.mu = self.mu_linear(x)
+        self.mu_lie = self.mean_module(x)
         self.v = self.reparameterize(x, n)
         
         self.z = self.nsample(n = n)
@@ -241,12 +257,7 @@ class SO3reparameterize(nn.Module):
 
     def nsample(self, n=1):
         # reproduce the decomposition of L-D we make
-
-        if self.quaternion_mean:
-            mu_lie = quaternions_to_group_matrix(self.mu)
-        else:
-            mu_lie = SO3reparameterize._expmap_rodrigues(self.mu)
         v_lie = SO3reparameterize._expmap_rodrigues(self.v)
-        return mu_lie @ v_lie
+        return self.mu_lie @ v_lie
     
 
