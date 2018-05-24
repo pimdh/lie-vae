@@ -9,7 +9,8 @@ from torch.distributions import Normal
 from torch.distributions.kl import kl_divergence
 
 from .utils import logsumexp, n2p, t2p
-from .lie_tools import rodrigues, map2LieAlgebra, quaternions_to_group_matrix, s2s1rodrigues
+from .lie_tools import rodrigues, map2LieAlgebra, quaternions_to_group_matrix, \
+    s2s1rodrigues, s2s2_gram_schmidt
 from .threevariate_normal import ThreevariateNormal
 from .functions.qr import qr_batched3
 
@@ -171,7 +172,8 @@ class QuaternionMean(nn.Module):
 
     def forward(self, x):
         return quaternions_to_group_matrix(self.map(x))
-    
+
+
 class S2S1Mean(nn.Module):
     def __init__(self, input_dims):
         super().__init__()
@@ -186,7 +188,22 @@ class S2S1Mean(nn.Module):
         s1_el = s1_el/s1_el.norm(p=2, dim=-1, keepdim=True)
         
         return s2s1rodrigues(s2_el, s1_el)
-    
+
+
+class S2S2Mean(nn.Module):
+    def __init__(self, input_dims):
+        super().__init__()
+        self.map = nn.Linear(input_dims, 6)
+
+        # Start with big outputs
+        self.map.weight.data.uniform_(-10, 10)
+        self.map.bias.data.uniform_(-10, 10)
+
+    def forward(self, x):
+        v = self.map(x).double().view(-1, 2, 3)
+        v1, v2 = v[:, 0], v[:, 1]
+        return s2s2_gram_schmidt(v1, v2).float()
+
 
 class QRMean(nn.Module):
     def __init__(self, input_dims):

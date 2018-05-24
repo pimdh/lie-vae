@@ -68,8 +68,8 @@ def rodrigues(v):
         + (1. - torch.cos(theta))[..., None]*(K@K)
     return R
 
+
 def s2s1rodrigues(s2_el, s1_el):
-    
     K = map2LieAlgebra(s2_el)
     
     cos_theta = s1_el[...,0]
@@ -81,6 +81,17 @@ def s2s1rodrigues(s2_el, s1_el):
         + (1. - cos_theta)[..., None, None]*(K@K)
         
     return R
+
+
+def s2s2_gram_schmidt(v1, v2):
+    """Normalise 2 3-vectors. Project second to orthogonal component.
+    Take cross product for third. Stack to form SO matrix."""
+    u1 = v1
+    e1 = u1 / u1.norm(p=2, dim=-1, keepdim=True).clamp(min=1E-5)
+    u2 = v2 - (e1 * v2).sum(-1, keepdim=True) * e1
+    e2 = u2 / u2.norm(p=2, dim=-1, keepdim=True).clamp(min=1E-5)
+    e3 = torch.cross(e1, e2)
+    return torch.stack([e1, e2, e3], 1)
 
 
 def vector_to_eazyz(v):
@@ -296,7 +307,8 @@ def test_wigner_d_matrices():
         matrices = wigner_d_matrix(angles, l)
 
         np.testing.assert_allclose(matrices, reference, rtol=1E-4, atol=1E-5)
-        
+
+
 def test_s2s1rodrigues(error):
     n = 10000
     s2_el = torch.tensor(np.random.normal(0,1, (n,3)), dtype = torch.float32)
@@ -316,14 +328,25 @@ def test_s2s1rodrigues(error):
     np.testing.assert_allclose(I, R@R_T, rtol=error, atol=error)
     np.testing.assert_allclose(ones, det, rtol=error, atol=error)
     print("test_s2s1rodrigues with {} elements and {} error passed".format(n, error))
-    
-    
-    
-    
-    
 
 
-if __name__ == '__main__':
+def test_s2s2_gram_schmidt():
+    v1, v2 = torch.rand(2, 10000, 3).double()
+    r = s2s2_gram_schmidt(v1, v2)
+
+    dets = torch.stack([x.det() for x in r])
+    I = torch.eye(3, dtype=v1.dtype).expand_as(r)
+
+    np.testing.assert_allclose(dets, torch.ones_like(dets), rtol=1E-6, atol=1E-6)
+    np.testing.assert_allclose(r.bmm(r.transpose(1, 2)), I, rtol=1E-6, atol=1E-6)
+
+
+def main():
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.manual_seed(0)
+
+    test_s2s2_gram_schmidt()
     test_s2s1rodrigues(1E-5)
     test_algebra_maps()
     test_log_exp(0.1, 1E-6)
@@ -331,3 +354,8 @@ if __name__ == '__main__':
     test_coordinate_changes()
     test_wigner_d_matrices()
 
+    print("All tests passed")
+
+
+if __name__ == '__main__':
+    main()

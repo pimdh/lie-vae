@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from time import time
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -36,6 +37,7 @@ class UnsupervisedExperiment:
 
     def train(self, epoch):
         losses = []
+        start = time()
         for it, batch in enumerate(self.train_loader):
             item_label, rot_label, img_label = batch
             self.model.train()
@@ -88,7 +90,10 @@ class UnsupervisedExperiment:
                     global_it)
 
                 self.log.add_scalar('beta', beta, global_it)
+
+                dt = (time() - start) / self.report_freq
                 print(('Epoch {} it {} train recon {:.4f} kl {:.4f}'
-                       ' test recon {:.4f} kl {:.4f}')
+                       ' test recon {:.4f} kl {:.4f} ({:.3f}s)')
                       .format(epoch, it+1, train_recon, train_kl,
-                              test_recon, test_kl))
+                              test_recon, test_kl, dt))
+                start = time()
