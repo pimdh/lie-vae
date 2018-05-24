@@ -163,7 +163,8 @@ class ChairsVAE(VAE):
             batch_norm=True,
             rgb=False,
             single_id=False,
-            mean_mode='alg'
+            mean_mode='alg',
+            group_reparam_in_dims=10
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()
@@ -171,7 +172,6 @@ class ChairsVAE(VAE):
         self.latent_mode = latent_mode
         self.decoder_mode = decoder_mode
 
-        group_reparam_in_dims = 15
         content_reparam_in_dims = 0 if single_id else content_dims
         if batch_norm:
             self.encoder = ChairsConvNetBN(

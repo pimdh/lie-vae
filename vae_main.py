@@ -3,6 +3,7 @@ import os.path
 from pprint import pprint
 from tensorboardX import SummaryWriter
 import argparse
+from math import pi
 
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
     HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset
@@ -88,6 +89,8 @@ def main():
         report_freq=args.report_freq,
         clip_grads=args.clip_grads,
         selective_clip=args.selective_clip,
+        continuity_lamb=args.continuity,
+        continuity_scale=2*pi/args.continuity_iscale,
         **exp_kwargs
     )
 
@@ -142,6 +145,11 @@ def parse_args():
                         help='Relative strength of supervised loss')
     parser.add_argument('--semi_batch', type=int, default=1,
                         help='Number of labelled samples in each batch')
+    parser.add_argument('--continuity', type=float,
+                        help='Strength of continuity loss')
+    parser.add_argument('--continuity_iscale', type=float, default=200,
+                        help='Inverse algebra distance with which continuity'
+                             'is measured. Distance is 2pi/iscale.')
     return parser.parse_args()
 
 

@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from time import time
+from lie_vae.continuity_loss import ContinuityLoss
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -10,7 +11,7 @@ class UnsupervisedExperiment:
     def __init__(self, *, log, model, optimizer, beta_schedule,
                  train_dataset, test_dataset, elbo_samples=1,
                  report_freq=1250, clip_grads=None, selective_clip=False,
-                 batch_size=64):
+                 batch_size=64, continuity_lamb=None, continuity_scale=None):
         self.log = log
         self.model = model
         self.optimizer = optimizer
@@ -23,6 +24,13 @@ class UnsupervisedExperiment:
         self.clip_grads = clip_grads
         self.selective_clip = selective_clip
         self.report_freq = report_freq
+
+        if continuity_lamb is not None:
+            self.continuity_loss = ContinuityLoss(
+                model, lamb=continuity_lamb, scale=continuity_scale,
+                log=log, report_freq=report_freq)
+        else:
+            self.continuity_loss = None
 
     def test(self):
         self.model.eval()
@@ -51,6 +59,9 @@ class UnsupervisedExperiment:
 
             if torch.isnan(kl).sum():
                 raise RuntimeError("NaN KL")
+
+            if self.continuity_loss:
+                loss = loss + self.continuity_loss(global_it)
 
             self.optimizer.zero_grad()
             loss.backward()

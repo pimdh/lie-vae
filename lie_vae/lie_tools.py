@@ -116,7 +116,10 @@ def log_map(R):
 
 def group_matrix_to_quaternions(r):
     """Map batch of SO(3) matrices to quaternions."""
-    n = r.size(0)
+    batch_dims = r.shape[:-2]
+    assert list(r.shape[-2:]) == [3, 3], 'Input must be 3x3 matrices'
+    r = r.view(-1, 3, 3)
+    n = r.shape[0]
 
     diags = [r[:, 0, 0], r[:, 1, 1], r[:, 2, 2]]
     denom_pre = torch.stack([
@@ -154,8 +157,9 @@ def group_matrix_to_quaternions(r):
 
     cases = torch.stack([case0, case1, case2, case3], 1)
 
-    return cases[torch.arange(n, dtype=torch.long),
-                 torch.argmax(denom.detach(), 1)]
+    quaternions = cases[torch.arange(n, dtype=torch.long),
+                        torch.argmax(denom.detach(), 1)]
+    return quaternions.view(*batch_dims, 4)
 
 
 def quaternions_to_eazyz(q):
@@ -239,6 +243,20 @@ def block_wigner_matrix_multiply(angles, data, max_degree):
         outputs.append(matrix.bmm(data[:, start:start+dim, :]))
         start += dim
     return torch.cat(outputs, 1)
+
+
+def random_quaternions(n, dtype=torch.float32, device=None):
+    u1, u2, u3 = torch.rand(3, n, dtype=dtype, device=device)
+    return torch.stack((
+        torch.sqrt(1-u1) * torch.sin(2 * np.pi * u2),
+        torch.sqrt(1-u1) * torch.cos(2 * np.pi * u2),
+        torch.sqrt(u1) * torch.sin(2 * np.pi * u3),
+        torch.sqrt(u1) * torch.cos(2 * np.pi * u3),
+    ), 1)
+
+
+def random_group_matrices(n, dtype=torch.float32, device=None):
+    return quaternions_to_group_matrix(random_quaternions(n, dtype, device))
 
 
 # Tests
