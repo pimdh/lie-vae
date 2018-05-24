@@ -10,13 +10,23 @@ from lie_learn.representations.SO3.wigner_d import \
 
 from .utils import randomR
 
-device_strings = ['cpu']
-for i in range(torch.cuda.device_count()):
-    device_strings.append('cuda:%d' % i)
 
-# Copy to all devices
-Jd = {d: [torch.tensor(J, dtype=torch.float32, device=d) for J in Jd_np]
-      for d in device_strings}
+class JContainer:
+    data = {}
+
+    @classmethod
+    def get(cls, device):
+        if str(device) in cls.data:
+            return cls.data[str(device)]
+
+        from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense \
+            import Jd as Jd_np
+
+        device_data = [torch.tensor(J, dtype=torch.float32, device=device)
+                       for J in Jd_np]
+        cls.data[str(device)] = device_data
+
+        return device_data
 
 
 def map2LieAlgebra(v):
@@ -211,7 +221,7 @@ def _z_rot_mat(angle, l):
 
 def wigner_d_matrix(angles, degree):
     """Create wigner D matrices for batch of ZYZ Euler anglers for degree l."""
-    J = Jd[str(angles.device)][degree][None]
+    J = JContainer.get(angles.device)[degree][None]
     x_a = _z_rot_mat(angles[:, 0], degree)
     x_b = _z_rot_mat(angles[:, 1], degree)
     x_c = _z_rot_mat(angles[:, 2], degree)
