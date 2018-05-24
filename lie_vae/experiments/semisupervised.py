@@ -29,15 +29,15 @@ class SemiSupervisedExperiment:
 
         self.unlabelled_loader = DataLoader(
             unlabelled_dataset, batch_size=batch_size-labelled_batch_size,
-            shuffle=True, num_workers=10)
+            shuffle=True, num_workers=5)
 
         # This will have many fewer samples, so we cycle the iterable
         self.labelled_loader = cycle(DataLoader(
             labelled_dataset, batch_size=labelled_batch_size,
-            shuffle=True, num_workers=10))
+            shuffle=True, num_workers=5))
 
         self.test_loader = DataLoader(
-            test_dataset, batch_size=batch_size, shuffle=True, num_workers=10)
+            test_dataset, batch_size=batch_size, shuffle=True, num_workers=5)
 
         self.lambda_supervised = lambda_supervised
         self.elbo_samples = elbo_samples

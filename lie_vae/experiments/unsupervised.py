@@ -17,9 +17,9 @@ class UnsupervisedExperiment:
         self.optimizer = optimizer
         self.beta_schedule = beta_schedule
         self.train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=True, num_workers=10)
+            train_dataset, batch_size=batch_size, shuffle=True, num_workers=5)
         self.test_loader = DataLoader(
-            test_dataset, batch_size=batch_size, shuffle=True, num_workers=10)
+            test_dataset, batch_size=batch_size, shuffle=True, num_workers=5)
         self.elbo_samples = elbo_samples
         self.clip_grads = clip_grads
         self.selective_clip = selective_clip
