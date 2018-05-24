@@ -30,12 +30,12 @@ class ContinuityLoss:
 
         diffs = (dec_starts - dec_ends).pow(2).view(self.num_samples, -1).sum(-1)
 
-        self.diffs.apppend(diffs)
+        self.diffs.append(diffs)
 
         mean = diffs.mean()
 
         if self.log and (it+1) % self.report_freq == 0:
-            agg_diffs = torch.cat(diffs)
+            agg_diffs = torch.cat(self.diffs)
             self.log.add_scalar('discontinuity', agg_diffs.mean(), it+1)
             self.log.add_scalar('discontinuity_max', agg_diffs.max(), it+1)
             self.log.add_histogram('continuity', agg_diffs.detach().cpu().numpy(), it+1)
