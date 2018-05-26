@@ -95,6 +95,40 @@ class ChairsDeconvNet(nn.Sequential):
         )
 
 
+class ChairsDeconvNet4(nn.Sequential):
+    """4x4 to 64x64 deconvolutional stack."""
+    def __init__(self, in_dims, hidden_dims, rgb=False):
+        out_dims = 3 if rgb else 1
+        super().__init__(
+            nn.Linear(in_dims, (4*4) * hidden_dims),
+            nn.LeakyReLU(0.2, inplace=True),
+            View(-1, hidden_dims, 4, 4),
+            nn.ConvTranspose2d(hidden_dims, hidden_dims, 4, 2, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.ConvTranspose2d(hidden_dims, hidden_dims, 4, 2, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.ConvTranspose2d(hidden_dims, hidden_dims, 4, 2, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.ConvTranspose2d(hidden_dims, out_dims, 4, 2, 1),
+        )
+
+
+class ChairsDeconvNet8(nn.Sequential):
+    """8x8 to 64x64 deconvolutional stack."""
+    def __init__(self, in_dims, hidden_dims, rgb=False):
+        out_dims = 3 if rgb else 1
+        super().__init__(
+            nn.Linear(in_dims, (8*8) * hidden_dims),
+            nn.LeakyReLU(0.2, inplace=True),
+            View(-1, hidden_dims, 8, 8),
+            nn.ConvTranspose2d(hidden_dims, hidden_dims, 4, 2, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.ConvTranspose2d(hidden_dims, hidden_dims, 4, 2, 1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.ConvTranspose2d(hidden_dims, out_dims, 4, 2, 1),
+        )
+
+
 class ChairsDeconvNetUpsample(nn.Sequential):
     """1x1 to 64x64 deconvolutional stack."""
     def __init__(self, in_dims, hidden_dims, rgb=False):

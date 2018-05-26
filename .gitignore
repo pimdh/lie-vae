@@ -11,3 +11,5 @@ mnist_example/*
 shapes
 !shapes/.gitkeep
 gym/out
+runs
+outputs
