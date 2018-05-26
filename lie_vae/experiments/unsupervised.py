@@ -24,6 +24,7 @@ class UnsupervisedExperiment:
         self.clip_grads = clip_grads
         self.selective_clip = selective_clip
         self.report_freq = report_freq
+        self.best_value = np.inf
 
         if continuity_lamb is not None:
             self.continuity_loss = ContinuityLoss(
@@ -91,6 +92,7 @@ class UnsupervisedExperiment:
                     global_it)
 
                 test_recon, test_kl, *test_kls = self.test()
+                self.best_value = self.best_value if test_recon > self.best_value else test_recon
                 self.log.add_scalar('test_loss', test_recon + beta * test_kl,
                                     global_it)
                 self.log.add_scalar('test_recon', test_recon, global_it)
