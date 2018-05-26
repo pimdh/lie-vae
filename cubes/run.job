@@ -3,11 +3,11 @@
 #SBATCH -N 1
 #SBATCH -C TitanX
 #SBATCH --gres=gpu:1
-#SBATCH --output=cubes.2.log
+#SBATCH --output=cubes.svae.log
 . activate lie-pim 
 
-python -u CubeVAE.py --batch_dim 128 --epochs 200 --batch_norm --latent so3 --decoder mlp --load so3.mlp.2.pt
-python -u CubeVAE.py --batch_dim 128 --epochs 200 --batch_norm --latent normal --decoder mlp --load normal.mlp.2.pt
-python -u CubeVAE.py --batch_dim 128 --epochs 200 --batch_norm --latent so3 --decoder action --load so3.action.2.pt
+python -u CubeVAE.py --batch_dim 128 --epochs 200 --batch_norm --latent vmf --decoder mlp
+#python -u CubeVAE.py --batch_dim 128 --epochs 200 --batch_norm --latent normal --decoder mlp --load normal.mlp.2.pt
+#python -u CubeVAE.py --batch_dim 128 --epochs 200 --batch_norm --latent so3 --decoder action --load so3.action.2.pt
 #python -u CubeVAE.py --batch_dim 128 --epochs 100 --batch_norm --latent normal --decoder action --save normal.action.pt
 

@@ -60,8 +60,8 @@ class VAE(nn.Module):
     def log_likelihood(self, x, n=1):
         x_recon = self.forward(x, n)
   
-        log_p_z = torch.cat([r.log_prior() for r in self.reparameterize], -1)
-        log_q_z_x = torch.cat([r.log_posterior() for r in self.reparameterize], -1)
+        log_p_z = torch.cat([r.log_prior() for r in self.reparameterize], -1).to(x.device)
+        log_q_z_x = torch.cat([r.log_posterior() for r in self.reparameterize], -1).to(x.device)
         log_p_x_z = - self.recon_loss(x_recon, x)
 
         return (logsumexp(log_p_x_z + log_p_z - log_q_z_x, dim=0) - np.log(n)).mean()
@@ -88,11 +88,11 @@ class CubeVAE(VAE):
             elif self.latent_mode == "normal":
                 self.rep0 = Nreparameterize(ndf * 4, 3)
                 self.reparameterize = [self.rep0]
-                self.decoder = MLPNet(in_dims=3, degrees=6, rep_copies=100, deconv=deconv)
+                self.decoder = MLPNet(in_dims=3, degrees=6, rep_copies=10, deconv=deconv)
             elif self.latent_mode == "vmf":
                 self.rep0 = Sreparameterize(ndf * 4, 4)
                 self.reparameterize = [self.rep0]
-                self.decoder = MLPNet(in_dims=4, degrees=6, rep_copies=100, deconv=deconv)
+                self.decoder = MLPNet(in_dims=4, degrees=6, rep_copies=10, deconv=deconv)
                 
         elif self.decoder_mode == "action":
             if self.latent_mode == "so3":

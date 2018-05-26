@@ -10,6 +10,7 @@ from torch.distributions import Normal
 from .utils import logsumexp, n2p, t2p
 from .lie_tools import rodrigues, map2LieAlgebra
 
+import hyperspherical_vae_pytorch
 from hyperspherical_vae_pytorch.distributions import VonMisesFisher, HypersphericalUniform
 
 class Nreparameterize(nn.Module):
@@ -63,12 +64,12 @@ class Sreparameterize(nn.Module):
 
     def forward(self, x, n=1):
         self.mu = self.mu_linear(x)
-        self.k = F.softplus(self.k_linear(x))
+        self.k = F.softplus(self.k_linear(x)) + 1 #-nn.Threshold(-2000, -2000)( - (F.softplus(self.k_linear(x)) + 1) )
         self.z = self.nsample(n=n)
         return self.z
 
     def kl(self):
-        return - VonMisesFisher(self.mu, self.k).entropy() + HypersphericalUniform(self.z_dim - 1).entropy() 
+        return - VonMisesFisher(self.mu, self.k).entropy() + HypersphericalUniform(self.z_dim - 1).entropy().to(self.mu.device) 
     
     def log_posterior(self):
         return VonMisesFisher(self.mu, self.k).log_prob(self.z)
