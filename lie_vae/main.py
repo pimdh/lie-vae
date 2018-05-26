@@ -93,15 +93,22 @@ def main():
         continuity_scale=2*pi/args.continuity_iscale,
         **exp_kwargs
     )
-
+    
+    early_stop_counter = 0
     for epoch in range(args.continue_epoch, args.epochs):
+        previous_best_value = experiment.best_value
         experiment.train(epoch)
 
         if args.save_dir:
-            if not os.path.exists(args.save_dir):
-                os.makedirs(args.save_dir)
-            torch.save(model.state_dict(), os.path.join(
-                args.save_dir, 'model.pickle'))
+            if args.max_early_stop is None or previous_best_value != experiment.best_value:
+                if not os.path.exists(args.save_dir):
+                    os.makedirs(args.save_dir)
+                torch.save(model.state_dict(), os.path.join(
+                    args.save_dir, 'model.pickle'))
+            elif args.max_early_stop is not None and early_stop_counter < args.max_early_stop:
+                early_stop_counter += 1
+            else:
+                break
     log.close()
 
 
@@ -150,6 +157,10 @@ def parse_args():
     parser.add_argument('--continuity_iscale', type=float, default=200,
                         help='Inverse algebra distance with which continuity'
                              'is measured. Distance is 2pi/iscale.')
+    parser.add_argument('--max_early_stop', type=int, default=50,
+                    help='How many epochs to train without improvements'
+                         'before doing early stopping.')
+
     return parser.parse_args()
 
 
