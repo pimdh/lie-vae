@@ -190,13 +190,20 @@ class ChairsVAE(VAE):
             rgb=False,
             single_id=False,
             mean_mode='alg',
-            group_reparam_in_dims=10
+            group_reparam_in_dims=10,
+            normal_dims=3,
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()
 
         self.latent_mode = latent_mode
         self.decoder_mode = decoder_mode
+
+        if self.latent_mode == 'normal':
+            if self.decoder_mode != 'mlp':
+                raise ValueError('Normal Action must be 3 dim')
+            # Make sure we don't have a bottleneck before
+            group_reparam_in_dims = max(group_reparam_in_dims, normal_dims)
 
         content_reparam_in_dims = 0 if single_id else content_dims
         if batch_norm:
@@ -229,8 +236,8 @@ class ChairsVAE(VAE):
             self.rep_group = SO3reparameterize(normal, mean_module, k=10)
             group_dims = 9
         elif self.latent_mode == 'normal':
-            self.rep_group = Nreparameterize(group_reparam_in_dims, 3)
-            group_dims = 3
+            self.rep_group = Nreparameterize(group_reparam_in_dims, normal_dims)
+            group_dims = normal_dims
         elif self.latent_mode == 'vmf':
             self.rep_group = Sreparameterize(group_reparam_in_dims, 4)
             group_dims = 4

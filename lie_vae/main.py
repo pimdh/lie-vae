@@ -56,7 +56,8 @@ def main():
         deconv_hidden=args.deconv_hidden,
         batch_norm=args.batch_norm,
         rgb=dataset.rgb,
-        single_id=dataset.single_id
+        single_id=dataset.single_id,
+        normal_dims=args.normal_dims
     ).to(device)
 
 
@@ -65,8 +66,8 @@ def main():
         model.load_state_dict(torch.load(os.path.join(
             args.save_dir, 'model.pickle')))
 
-    num_valid = 25000 #min(int(len(dataset) * 0.1), 5000)
-    num_test = 25000 # min(int(len(dataset) * 0.1), 5000)
+    num_valid = 25000
+    num_test = 25000
 
     split = [num_valid, num_test, len(dataset) - num_valid - num_test]
     valid_dataset, test_dataset, train_dataset = random_split(dataset, split)
@@ -178,6 +179,8 @@ def parse_args():
                          'before doing early stopping.')
     parser.add_argument('--subsample', type=float, default=1.,
                         help='Part of the dataset to subsample in [0,1].')
+    parser.add_argument('--normal_dims', type=int, default=3,
+                        help='Latent space dims for Normal')
 
     return parser.parse_args()
 
