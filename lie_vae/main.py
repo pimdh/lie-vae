@@ -4,6 +4,8 @@ from pprint import pprint
 from tensorboardX import SummaryWriter
 import argparse
 from math import pi
+import numpy as np
+from torch.utils.data import DataLoader
 
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
     HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset
@@ -25,19 +27,19 @@ def main():
     log = SummaryWriter(args.log_dir)
 
     if args.dataset == 'objects':
-        dataset = ObjectsDataset()
+        dataset = ObjectsDataset(subsample=args.subsample)
     elif args.dataset == 'objects3':
-        dataset = ThreeObjectsDataset()
+        dataset = ThreeObjectsDataset(subsample=args.subsample)
     elif args.dataset == 'chairs':
-        dataset = SelectedDataset()
+        dataset = SelectedDataset(subsample=args.subsample)
     elif args.dataset == 'humanoid':
-        dataset = HumanoidDataset()
+        dataset = HumanoidDataset(subsample=args.subsample)
     elif args.dataset == 'chumanoid':
-        dataset = ColorHumanoidDataset()
+        dataset = ColorHumanoidDataset(subsample=args.subsample)
     elif args.dataset == 'single':
-        dataset = SingleChairDataset()
+        dataset = SingleChairDataset(subsample=args.subsample)
     elif args.dataset == 'spherecube':
-        dataset = SphereCubeDataset()
+        dataset = SphereCubeDataset(subsample=args.subsample)
     else:
         raise RuntimeError('Wrong dataset')
     if not len(dataset):
@@ -57,13 +59,19 @@ def main():
         single_id=dataset.single_id
     ).to(device)
 
+
     if args.continue_epoch > 0:
+        print('Loading..')
         model.load_state_dict(torch.load(os.path.join(
             args.save_dir, 'model.pickle')))
 
-    num_test = min(int(len(dataset) * 0.2), 5000)
-    split = [len(dataset)-num_test, num_test]
-    train_dataset, test_dataset = random_split(dataset, split)
+    num_valid = 25000 #min(int(len(dataset) * 0.1), 5000)
+    num_test = 25000 # min(int(len(dataset) * 0.1), 5000)
+
+    split = [num_valid, num_test, len(dataset) - num_valid - num_test]
+    valid_dataset, test_dataset, train_dataset = random_split(dataset, split)
+    
+    print('Datset splits: train={}, valid={}, test={}'.format(len(train_dataset), len(valid_dataset), len(test_dataset)))
 
     optimizer = torch.optim.Adam(model.parameters())
 
@@ -84,7 +92,7 @@ def main():
         optimizer=optimizer,
         beta_schedule=get_beta_schedule(args.beta_schedule, args.beta),
         train_dataset=train_dataset,
-        test_dataset=test_dataset,
+        test_dataset=valid_dataset,
         elbo_samples=args.elbo_samples,
         report_freq=args.report_freq,
         clip_grads=args.clip_grads,
@@ -93,7 +101,7 @@ def main():
         continuity_scale=2*pi/args.continuity_iscale,
         **exp_kwargs
     )
-    
+   
     early_stop_counter = 0
     for epoch in range(args.continue_epoch, args.epochs):
         previous_best_value = experiment.best_value
@@ -110,6 +118,14 @@ def main():
             else:
                 break
     log.close()
+ 
+    print('Computing LL..')
+
+    model = model.eval()
+
+    test_dataset = DataLoader(test_dataset, batch_size=4, shuffle=True, num_workers=5)
+
+    print('LL: {:.2f}'.format(np.mean([model.log_likelihood(batch[-1].to(device), n=500).data.cpu().numpy() for batch in test_dataset])))
 
 
 def parse_args():
@@ -160,6 +176,8 @@ def parse_args():
     parser.add_argument('--max_early_stop', type=int, default=50,
                     help='How many epochs to train without improvements'
                          'before doing early stopping.')
+    parser.add_argument('--subsample', type=float, default=1.,
+                        help='Part of the dataset to subsample in [0,1].')
 
     return parser.parse_args()
 

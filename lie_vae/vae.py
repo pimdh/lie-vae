@@ -156,7 +156,7 @@ class CubeVAE(VAE):
         if self.decoder_mode == "action":
             if self.latent_mode == "so3" or self.latent_mode == 'so3f':
                 angles = group_matrix_to_eazyz(z_pose_)
-            elif self.latent_mode == "normal":
+            elif self.latent_mode == "normal" or self.latent_mode == "vmf":
                 angles = vector_to_eazyz(z_pose_)
 
             x_recon = self.decoder(angles).view(*z_pose.shape[:2], 3, 32, 32)
@@ -231,6 +231,9 @@ class ChairsVAE(VAE):
         elif self.latent_mode == 'normal':
             self.rep_group = Nreparameterize(group_reparam_in_dims, 3)
             group_dims = 3
+        elif self.latent_mode == 'vmf':
+            self.rep_group = Sreparameterize(group_reparam_in_dims, 4)
+            group_dims = 4
         else:
             raise ValueError('Wrong latent mode')
 
@@ -286,7 +289,7 @@ class ChairsVAE(VAE):
         if self.decoder_mode == "action":
             if self.latent_mode == "so3" or self.latent_mode == 'so3f':
                 angles = group_matrix_to_eazyz(z_pose)
-            elif self.latent_mode == "normal":
+            elif self.latent_mode == "normal" or self.latent_mode == "vmf":
                 angles = vector_to_eazyz(z_pose)
             else:
                 raise RuntimeError()

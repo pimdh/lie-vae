@@ -77,7 +77,7 @@ class UnsupervisedExperiment:
 
             losses.append((recon.mean().item(), kl.mean().item(),
                            *[x.mean().item() for x in kls]))
-
+            
             if (it + 1) % self.report_freq == 0 or \
                     it + 1 == len(self.train_loader):
                 train_recon, train_kl, *train_kls = \

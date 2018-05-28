@@ -15,7 +15,7 @@ class ShapeDataset(Dataset):
     rgb = False
     single_id = False
 
-    def __init__(self, directory):
+    def __init__(self, directory, subsample=1.):
         self.directory = directory
         index_path = os.path.join(directory, 'files.txt')
         if os.path.exists(index_path):
@@ -26,10 +26,17 @@ class ShapeDataset(Dataset):
             self.files = glob(os.path.join(directory, '**/*.jpg'), recursive=True)
             self.root = None
 
+        seed = np.random.get_state()
+        np.random.seed(0)
+
+        self.files = np.random.choice(self.files, int(len(self.files) * subsample), replace=False)
+        np.random.set_state(seed)
+
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, idx):
+
         filename = self.files[idx]
         path = os.path.join(self.root, filename) if self.root else filename
         image = Image.open(path)
@@ -47,6 +54,7 @@ class ShapeDataset(Dataset):
         group_el = torch.tensor(SO3_coordinates(quaternion, 'Q', 'MAT'),
                                 dtype=torch.float32)
         name = self.filename_to_name(filename)
+
         return name, group_el, image_tensor
 
     def filename_to_quaternion(self, filename):
@@ -93,8 +101,8 @@ class ThreeObjectsDataset(NamedDataset):
 
 
 class HumanoidDataset(ShapeDataset):
-    def __init__(self):
-        super().__init__('data/humanoid')
+    def __init__(self, subsample=1.):
+        super().__init__('data/humanoid', subsample=subsample)
 
     def filename_to_name(self, filename):
         return 0
@@ -103,8 +111,8 @@ class HumanoidDataset(ShapeDataset):
 class ColorHumanoidDataset(ShapeDataset):
     rgb = True
 
-    def __init__(self):
-        super().__init__('data/chumanoid')
+    def __init__(self, subsample=1.):
+        super().__init__('data/chumanoid', subsample=subsample)
 
     def filename_to_name(self, filename):
         return 0
@@ -113,8 +121,8 @@ class ColorHumanoidDataset(ShapeDataset):
 class SingleChairDataset(ShapeDataset):
     single_id = True
 
-    def __init__(self):
-        super().__init__('data/chairs/single')
+    def __init__(self, subsample=1.):
+        super().__init__('data/chairs/single', subsample=subsample)
 
     def filename_to_name(self, filename):
         return 0
@@ -124,8 +132,8 @@ class SphereCubeDataset(ShapeDataset):
     rgb = True
     single_id = True
 
-    def __init__(self):
-        super().__init__('data/spherecube')
+    def __init__(self, subsample=1.):
+        super().__init__('data/spherecube', subsample=subsample)
 
     def filename_to_name(self, filename):
         return 0
