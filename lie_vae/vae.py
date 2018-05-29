@@ -200,7 +200,7 @@ class ChairsVAE(VAE):
         self.decoder_mode = decoder_mode
 
         if self.latent_mode == 'normal':
-            if self.decoder_mode != 'mlp':
+            if self.decoder_mode != 'mlp' and normal_dims != 3:
                 raise ValueError('Normal Action must be 3 dim')
             # Make sure we don't have a bottleneck before
             group_reparam_in_dims = max(group_reparam_in_dims, normal_dims)
