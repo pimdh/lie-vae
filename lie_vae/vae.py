@@ -10,7 +10,7 @@ from .reparameterize import  SO3reparameterize, N0reparameterize, \
     Nreparameterize, Sreparameterize, N0Fullreparameterize, \
     AlgebraMean, QuaternionMean, QRMean, S2S1Mean, S2S2Mean
 
-from .lie_tools import group_matrix_to_eazyz, vector_to_eazyz
+from .lie_tools import group_matrix_to_eazyz, vector_to_eazyz, quaternions_to_eazyz
 from .utils import logsumexp, tensor_slicer, MLP, Flatten
 
 
@@ -253,7 +253,7 @@ class ChairsVAE(VAE):
         elif self.latent_mode == 'normal':
             self.rep_group = Nreparameterize(group_reparam_in_dims, normal_dims)
             group_dims = normal_dims
-        elif self.latent_mode == 'vmf':
+        elif self.latent_mode == 'vmf' or self.latent_mode == 'vmfq':
             self.rep_group = Sreparameterize(group_reparam_in_dims, 4)
             group_dims = 4
         else:
@@ -319,6 +319,8 @@ class ChairsVAE(VAE):
                 angles = group_matrix_to_eazyz(z_pose)
             elif self.latent_mode == "normal" or self.latent_mode == "vmf":
                 angles = vector_to_eazyz(z_pose)
+            elif self.latent_mode == "vmfq":
+                angles = quaternions_to_eazyz(z_pose)
             else:
                 raise RuntimeError()
 
