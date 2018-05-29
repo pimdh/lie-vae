@@ -4,7 +4,7 @@ import numpy as np
 
 from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, \
     ChairsDeconvNetUpsample, CubesConvNetBN, ChairsConvNetBN, ChairsDeconvNet4, \
-    ChairsDeconvNet8
+    ChairsDeconvNet8, ChairsThinNet
 from .decoders import MLPNet, ActionNet
 from .reparameterize import  SO3reparameterize, N0reparameterize, \
     Nreparameterize, Sreparameterize, N0Fullreparameterize, \
@@ -284,6 +284,8 @@ class ChairsVAE(VAE):
             deconv = ChairsDeconvNet8(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
         elif deconv_mode == 'upsample':
             deconv = ChairsDeconvNetUpsample(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
+        elif deconv_mode == 'thin':
+            deconv = ChairsThinNet(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
         elif deconv_mode == 'toy':
             deconv = nn.Sequential()
         else:

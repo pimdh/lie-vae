@@ -95,6 +95,18 @@ class ChairsDeconvNet(nn.Sequential):
         )
 
 
+class ChairsThinNet(nn.Sequential):
+    """1x1 to 64x64 deconvolutional stack."""
+    def __init__(self, in_dims, hidden_dims, rgb=False):
+        out_dims = 3 if rgb else 1
+        super().__init__(
+            nn.Linear(in_dims, 68 * 68 * hidden_dims),
+            nn.ReLU(),
+            View(-1, hidden_dims, 68, 68),
+            nn.Conv2d(hidden_dims, out_dims, 5, 1, 0),
+        )
+
+
 class ChairsDeconvNet4(nn.Sequential):
     """4x4 to 64x64 deconvolutional stack."""
     def __init__(self, in_dims, hidden_dims, rgb=False):
