@@ -66,6 +66,7 @@ def main():
         normal_dims=args.normal_dims,
         deterministic=args.deterministic,
         item_rep=item_rep,
+        wigner_transpose=args.wigner_transpose,
     ).to(device)
 
     if args.continue_epoch > 0:
@@ -188,6 +189,8 @@ def parse_args():
                         help='Latent space dims for Normal')
     parser.add_argument('--deterministic', action='store_true',
                         help='Let reparametrizers return means.')
+    parser.add_argument('--wigner_transpose', action='store_true',
+                        help='Take tranposed wigner matrices')
 
     return parser.parse_args()
 

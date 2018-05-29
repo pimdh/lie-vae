@@ -238,7 +238,7 @@ def wigner_d_matrix(angles, degree):
     return res.view(*batch_dims, 2*degree+1, 2*degree+1)
 
 
-def block_wigner_matrix_multiply(angles, data, max_degree):
+def block_wigner_matrix_multiply(angles, data, max_degree, transpose=False):
     """Transform data using wigner d matrices for all degrees.
 
     vector_dim is dictated by max_degree by the expression:
@@ -252,6 +252,7 @@ def block_wigner_matrix_multiply(angles, data, max_degree):
     Input:
     - angles (batch, 3)  ZYZ Euler angles
     - vector (batch, vector_dim, data_dim)
+    - transpose whether to use transpose wigner matrices
 
     Output: (batch, vector_dim, data_dim)
     """
@@ -260,6 +261,8 @@ def block_wigner_matrix_multiply(angles, data, max_degree):
     for degree in range(max_degree+1):
         dim = 2 * degree + 1
         matrix = wigner_d_matrix(angles, degree)
+        if transpose:
+            matrix = matrix.transpose(-2, -1)
         outputs.append(matrix.bmm(data[:, start:start+dim, :]))
         start += dim
     return torch.cat(outputs, 1)

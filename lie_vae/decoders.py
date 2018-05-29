@@ -9,7 +9,7 @@ class ActionNet(nn.Module):
     """Uses proper group action."""
     def __init__(self, degrees, deconv, content_dims=10, rep_copies=10,
                  single_id=True, harmonics_encoder_layers=3,
-                 with_mlp=False, item_rep=None):
+                 with_mlp=False, item_rep=None, transpose=False):
         """Action decoder.
 
         Params:
@@ -24,11 +24,13 @@ class ActionNet(nn.Module):
                                      content vector to harmonics matrix
         - with_mlp : route transformed harmonics through MLP before deconv
         - item_rep : optional fixed single item rep
+        - transpose : Whether to take transpose of fourier matrices
         """
         super().__init__()
         self.degrees = degrees
         self.rep_copies = rep_copies
         self.matrix_dims = (degrees + 1) ** 2
+        self.transpose = transpose
 
         if single_id:
             if item_rep is None:
@@ -57,14 +59,14 @@ class ActionNet(nn.Module):
 
         assert d == 3, 'Input should be Euler angles.'
 
-
         if content_data is None:
             harmonics = self.item_rep.expand(n, -1, -1)
         else:
             harmonics = self.harmonics_encoder(content_data)\
                 .view(n, self.matrix_dims, self.rep_copies)
 
-        item = block_wigner_matrix_multiply(angles, harmonics, self.degrees) \
+        item = block_wigner_matrix_multiply(
+            angles, harmonics, self.degrees, transpose=self.transpose) \
             .view(-1, self.matrix_dims * self.rep_copies)
 
         if self.mlp:
