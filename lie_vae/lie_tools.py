@@ -364,29 +364,43 @@ def test_wigner_d_matrices():
         wa = wigner_d_matrix(group_matrix_to_eazyz(ra), l)
         wb = wigner_d_matrix(group_matrix_to_eazyz(rb), l)
         wc = wigner_d_matrix(group_matrix_to_eazyz(ra.bmm(rb)), l)
-        wc_result = wa.bmm(wb)
+        wc_result = wb.bmm(wa)
 
-        # TODO: FAILS
-        # np.testing.assert_allclose(wc_result, wc, rtol=1E-4, atol=1E-5)
+        np.testing.assert_allclose(wc_result, wc, rtol=1E-3, atol=1E-3)
+
+
+def test_orthogonal(r):
+    r = np.array(r).reshape(-1, r.shape[-1], r.shape[-1])
+    eye = np.eye(r.shape[-1], dtype=r.dtype)[None]
+    np.testing.assert_allclose(r @ np.swapaxes(r, -2, -1), eye, atol=1E-6)
 
 
 def test_ref_wigner_d_matrices():
     for l in range(6):
-        for _ in range(1000):
+        for i in range(1000):
             qa, qb = random_quaternions(2, dtype=torch.float64).numpy()
             ra = SO3_coordinates(qa, 'Q', 'MAT')
             rb = SO3_coordinates(qb, 'Q', 'MAT')
             rc = ra.dot(rb)
 
+            test_orthogonal(ra)
+            test_orthogonal(rb)
+            test_orthogonal(rc)
+
             aa = SO3_coordinates(ra, 'MAT', 'EA323')
             ab = SO3_coordinates(rb, 'MAT', 'EA323')
             ac = SO3_coordinates(rc, 'MAT', 'EA323')
+
+            np.testing.assert_allclose(SO3_coordinates(aa, 'EA323', 'MAT'), ra, atol=1E-6, rtol=1E-6)
+            np.testing.assert_allclose(SO3_coordinates(ab, 'EA323', 'MAT'), rb, atol=1E-6, rtol=1E-6)
+            np.testing.assert_allclose(SO3_coordinates(ac, 'EA323', 'MAT'), rc, atol=1E-6, rtol=1E-6)
 
             wa = reference_wigner_D_matrix(l, *aa)
             wb = reference_wigner_D_matrix(l, *ab)
             wc = reference_wigner_D_matrix(l, *ac)
 
-            np.testing.assert_allclose(wa.dot(wb), wc, atol=1E-2, rtol=1E-2)
+            np.testing.assert_allclose(wb @ wa, wc, atol=1E-6, rtol=1E-6)
+
 
 
 def test_s2s1rodrigues(error):
@@ -433,9 +447,7 @@ def main():
     test_log_exp(10, 1E-6)
     test_coordinate_changes()
     test_wigner_d_matrices()
-
-    # TODO: Fails?
-    # test_ref_wigner_d_matrices()
+    test_ref_wigner_d_matrices()
 
     print("All tests passed")
 
