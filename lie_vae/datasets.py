@@ -9,6 +9,7 @@ from PIL import Image
 from torch.utils.data import Dataset, TensorDataset
 
 from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
+from lie_vae.lie_tools import block_wigner_matrix_multiply, random_quaternions, quaternions_to_eazyz
 
 
 class ShapeDataset(Dataset):
@@ -148,3 +149,36 @@ class CubeDataset(TensorDataset):
         data = np.load(os.path.join(data_dir, mode+'_data2.npy'))
         # labels = np.load(os.path.join(data_dir, mode+'_labels.npy'))
         super().__init__(torch.from_numpy(data.astype(np.float32))) #, torch.from_numpy(labels))
+
+
+class ToyDataset(TensorDataset):
+    single_id = True
+    rgb = False
+
+    def __init__(self, tensors=None, device=None):
+        if tensors is None:
+            tensors = torch.load('data/toy.pickle')
+        if device is not None:
+            tensors = [t.to(device) for t in tensors]
+        super().__init__(*tensors)
+
+    @classmethod
+    def generate(cls, n=1000, degrees=6, rep_copies=10, device=None, batch_size=64):
+        torch.manual_seed(0)
+        torch.cuda.manual_seed(0)
+        harmonics = torch.randn((degrees+1)**2, rep_copies, device=device)
+        harmonics = harmonics / harmonics.norm()
+        xs, qs = [], []
+        for i in range(0, n, batch_size):
+            batch_n = min(i + batch_size, n)-i
+            q = random_quaternions(batch_n, device=device)
+            x = block_wigner_matrix_multiply(
+                quaternions_to_eazyz(q), harmonics.expand(batch_n, -1, -1), degrees)
+            xs.append(x), qs.append(q)
+        return cls(tensors=(torch.cat(qs, 0),
+                            harmonics.expand(n, -1, -1),
+                            torch.cat(xs, 0)),
+                   device=device)
+
+    def save(self):
+        torch.save(self.tensors, 'data/toy.pickle')

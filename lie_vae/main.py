@@ -8,7 +8,8 @@ import numpy as np
 from torch.utils.data import DataLoader
 
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
-    HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset
+    HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset, \
+    ToyDataset
 from lie_vae.experiments import UnsupervisedExperiment, SemiSupervisedExperiment
 from lie_vae.vae import ChairsVAE
 from lie_vae.utils import random_split
@@ -26,6 +27,7 @@ def main():
 
     log = SummaryWriter(args.log_dir)
 
+    item_rep = None  # Possibly given fixed harmonics
     if args.dataset == 'objects':
         dataset = ObjectsDataset(subsample=args.subsample)
     elif args.dataset == 'objects3':
@@ -40,6 +42,9 @@ def main():
         dataset = SingleChairDataset(subsample=args.subsample)
     elif args.dataset == 'spherecube':
         dataset = SphereCubeDataset(subsample=args.subsample)
+    elif args.dataset == 'toy':
+        dataset = ToyDataset()
+        item_rep = dataset[0][1]
     else:
         raise RuntimeError('Wrong dataset')
     if not len(dataset):
@@ -50,16 +55,18 @@ def main():
         latent_mode=args.latent_mode,
         mean_mode=args.mean_mode,
         decoder_mode=args.decoder_mode,
-        deconv_mode=args.deconv_mode,
+        encode_mode=('toy' if args.dataset == 'toy' else 'conv'),
+        deconv_mode=('toy' if args.dataset == 'toy' else args.deconv_mode),
         rep_copies=args.rep_copies,
         degrees=args.degrees,
         deconv_hidden=args.deconv_hidden,
         batch_norm=args.batch_norm,
         rgb=dataset.rgb,
         single_id=dataset.single_id,
-        normal_dims=args.normal_dims
+        normal_dims=args.normal_dims,
+        deterministic=args.deterministic,
+        item_rep=item_rep,
     ).to(device)
-
 
     if args.continue_epoch > 0:
         print('Loading..')
@@ -181,6 +188,8 @@ def parse_args():
                         help='Part of the dataset to subsample in [0,1].')
     parser.add_argument('--normal_dims', type=int, default=3,
                         help='Latent space dims for Normal')
+    parser.add_argument('--deterministic', action='store_true',
+                        help='Let reparametrizers return means.')
 
     return parser.parse_args()
 

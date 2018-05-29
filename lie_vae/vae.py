@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
 
 from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, \
@@ -12,7 +11,7 @@ from .reparameterize import  SO3reparameterize, N0reparameterize, \
     AlgebraMean, QuaternionMean, QRMean, S2S1Mean, S2S2Mean
 
 from .lie_tools import group_matrix_to_eazyz, vector_to_eazyz
-from .utils import logsumexp, tensor_slicer
+from .utils import logsumexp, tensor_slicer, MLP, Flatten
 
 
 class VAE(nn.Module):
@@ -184,6 +183,7 @@ class ChairsVAE(VAE):
             content_dims=10,
             degrees=6,
             deconv_hidden=50,
+            encode_mode='conv',
             deconv_mode='deconv',
             rep_copies=10,
             batch_norm=True,
@@ -192,12 +192,19 @@ class ChairsVAE(VAE):
             mean_mode='alg',
             group_reparam_in_dims=10,
             normal_dims=3,
+            deterministic=False,
+            item_rep=None,
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()
 
         self.latent_mode = latent_mode
         self.decoder_mode = decoder_mode
+
+        if deconv_mode == 'toy':
+            self.out_shape = ((degrees+1)**2, rep_copies)
+        else:
+            self.out_shape = (3 if rgb else 1, 64, 64)
 
         if self.latent_mode == 'normal':
             if self.decoder_mode != 'mlp' and normal_dims != 3:
@@ -206,12 +213,20 @@ class ChairsVAE(VAE):
             group_reparam_in_dims = max(group_reparam_in_dims, normal_dims)
 
         content_reparam_in_dims = 0 if single_id else content_dims
-        if batch_norm:
-            self.encoder = ChairsConvNetBN(
-                group_reparam_in_dims + content_reparam_in_dims, rgb=rgb)
+        if encode_mode == 'conv':
+            if batch_norm:
+                self.encoder = ChairsConvNetBN(
+                    group_reparam_in_dims + content_reparam_in_dims, rgb=rgb)
+            else:
+                self.encoder = ChairsConvNet(
+                    group_reparam_in_dims + content_reparam_in_dims, rgb=rgb)
+        elif encode_mode == 'toy':
+            self.encoder = nn.Sequential(
+                Flatten(),
+                MLP((degrees+1)**2 * rep_copies, group_reparam_in_dims, 100, 4)
+            )
         else:
-            self.encoder = ChairsConvNet(
-                group_reparam_in_dims + content_reparam_in_dims, rgb=rgb)
+            raise ValueError('Wrong encode mode')
 
         # Setup latent space
         if self.latent_mode == 'so3' or self.latent_mode == 'so3f':
@@ -244,6 +259,9 @@ class ChairsVAE(VAE):
         else:
             raise ValueError('Wrong latent mode')
 
+        if deterministic:
+            self.rep_group.deterministic()
+
         if single_id:
             self.reparameterize = nn.ModuleList([self.rep_group])
         else:
@@ -265,6 +283,8 @@ class ChairsVAE(VAE):
             deconv = ChairsDeconvNet8(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
         elif deconv_mode == 'upsample':
             deconv = ChairsDeconvNetUpsample(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
+        elif deconv_mode == 'toy':
+            deconv = nn.Sequential()
         else:
             raise RuntimeError()
 
@@ -274,7 +294,8 @@ class ChairsVAE(VAE):
                 deconv=deconv,
                 content_dims=content_dims,
                 rep_copies=rep_copies,
-                single_id=single_id)
+                single_id=single_id,
+                item_rep=item_rep)
         elif self.decoder_mode == 'mlp':
             self.decoder = MLPNet(
                 degrees=degrees,
@@ -308,8 +329,11 @@ class ChairsVAE(VAE):
         else:
             raise RuntimeError()
 
-        return x_recon.reshape(*batch_dims, x_recon.shape[1], 64, 64)
+        return x_recon.reshape(*batch_dims, *self.out_shape)
 
     def recon_loss(self, x_recon, x):
         x = x.expand_as(x_recon)
-        return ((x_recon - x) ** 2).sum(-1).sum(-1).sum(-1)
+        l = ((x_recon - x) ** 2)
+        for _ in range(len(self.out_shape)):
+            l = l.sum(-1)
+        return l

@@ -51,10 +51,16 @@ class UnsupervisedExperiment:
             item_label, rot_label, img_label = batch
             self.model.train()
             img_label = img_label.to(device)
-            recon, kl, kls = self.model.elbo(img_label, n=self.elbo_samples)
 
             global_it = epoch * len(self.train_loader) + it + 1
             beta = self.beta_schedule(global_it)
+
+            if beta == 0:
+                x_recon = self.model.forward(img_label, self.elbo_samples)
+                recon = self.model.recon_loss(x_recon, img_label)
+                kl, kls = torch.zeros_like(recon), []
+            else:
+                recon, kl, kls = self.model.elbo(img_label, n=self.elbo_samples)
 
             loss = (recon + beta * kl).mean()
 

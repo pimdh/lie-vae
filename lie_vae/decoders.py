@@ -9,7 +9,7 @@ class ActionNet(nn.Module):
     """Uses proper group action."""
     def __init__(self, degrees, deconv, content_dims=10, rep_copies=10,
                  single_id=True, harmonics_encoder_layers=3,
-                 with_mlp=False):
+                 with_mlp=False, item_rep=None):
         """Action decoder.
 
         Params:
@@ -23,6 +23,7 @@ class ActionNet(nn.Module):
         - harmonics_encoder_layers : number of layers of MLP that transforms
                                      content vector to harmonics matrix
         - with_mlp : route transformed harmonics through MLP before deconv
+        - item_rep : optional fixed single item rep
         """
         super().__init__()
         self.degrees = degrees
@@ -30,7 +31,10 @@ class ActionNet(nn.Module):
         self.matrix_dims = (degrees + 1) ** 2
 
         if single_id:
-            self.item_rep = nn.Parameter(torch.randn((self.matrix_dims, rep_copies)))
+            if item_rep is None:
+                self.item_rep = nn.Parameter(torch.randn((self.matrix_dims, rep_copies)))
+            else:
+                self.register_buffer('item_rep', item_rep)
         else:
             self.item_rep = None
             self.harmonics_encoder = MLP(

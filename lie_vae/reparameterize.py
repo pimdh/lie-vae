@@ -26,6 +26,7 @@ class Nreparameterize(nn.Module):
         self.z_dim = z_dim
         self.sigma_linear = nn.Linear(input_dim, z_dim)
         self.mu_linear = nn.Linear(input_dim, z_dim)
+        self.return_means = False
 
     def forward(self, x, n=1):
         #print(x.max().data.cpu().numpy(),x.min().data.cpu().numpy())
@@ -53,8 +54,14 @@ class Nreparameterize(nn.Module):
         return Normal(torch.zeros_like(self.mu), torch.ones_like(self.sigma)).log_prob(self.z).sum(-1)
    
     def nsample(self, n=1):
+        if self.return_means:
+            return self.mu.expand(n, -1, -1)
         eps = Normal(torch.zeros_like(self.mu), torch.ones_like(self.mu)).sample((n,))
         return self.mu + eps * self.sigma
+
+    def deterministic(self):
+        """Set to return means."""
+        self.return_means = True
 
 class Sreparameterize(nn.Module):
 
@@ -65,9 +72,11 @@ class Sreparameterize(nn.Module):
         self.z_dim = z_dim
         self.k_linear = nn.Linear(input_dim, 1)
         self.mu_linear = nn.Linear(input_dim, z_dim)
+        self.return_means = False
 
     def forward(self, x, n=1):
         self.mu = self.mu_linear(x)
+        self.mu = self.mu / self.mu.norm(p=2, dim=-1, keepdim=True)
         self.k = F.softplus(self.k_linear(x)) + 1 #-nn.Threshold(-2000, -2000)( - (F.softplus(self.k_linear(x)) + 1) )
         self.z = self.nsample(n=n)
         return self.z
@@ -82,8 +91,14 @@ class Sreparameterize(nn.Module):
         return HypersphericalUniform(self.z_dim - 1).log_prob(self.z)
    
     def nsample(self, n=1):
+        if self.return_means:
+            return self.mu.expand(n, -1, -1)
         return VonMisesFisher(self.mu, self.k).rsample(n)
-    
+
+    def deterministic(self):
+        """Set to return means."""
+        self.return_means = True
+
 class N0reparameterize(nn.Module):
 
     def __init__(self, input_dim, z_dim):
@@ -92,7 +107,7 @@ class N0reparameterize(nn.Module):
         self.input_dim = input_dim
         self.z_dim = z_dim
         self.sigma_linear = nn.Linear(input_dim, z_dim)
-       
+        self.return_means = False
 
     def forward(self, x, n=1):
         
@@ -113,8 +128,14 @@ class N0reparameterize(nn.Module):
         return Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).log_prob(self.z).sum(-1)
    
     def nsample(self, n=1):
+        if self.return_means:
+            return torch.zeros_like(self.sigma).expand(n, -1, -1)
         eps = Normal(torch.zeros_like(self.sigma), torch.ones_like(self.sigma)).sample((n,))
         return eps * self.sigma
+
+    def deterministic(self):
+        """Set to return means."""
+        self.return_means = True
 
 
 class N0Fullreparameterize(nn.Module):
@@ -124,15 +145,16 @@ class N0Fullreparameterize(nn.Module):
         self.input_dim = input_dim
         self.z_dim = z_dim
         self.scale_linear = nn.Linear(input_dim, z_dim*z_dim)
+        self.return_means = False
 
     def forward(self, x, n=1):
-        scale = F.softplus(self.scale_linear(x)) \
+        self.scale = F.softplus(self.scale_linear(x)) \
             .view(-1, self.z_dim, self.z_dim)
         # Make lower triangular
-        scale = scale * x.new_ones(self.z_dim, self.z_dim).tril()
+        self.scale = self.scale * x.new_ones(self.z_dim, self.z_dim).tril()
 
         zero_mean = x.new_zeros((x.shape[0], self.z_dim))
-        self.distr = ThreevariateNormal(zero_mean, scale_tril=scale)
+        self.distr = ThreevariateNormal(zero_mean, scale_tril=self.scale)
         self.z = self.nsample(n=n)
         return self.z
 
@@ -154,7 +176,13 @@ class N0Fullreparameterize(nn.Module):
         return ThreevariateNormal(zero_mean, scale_tril=prior_scale)
 
     def nsample(self, n=1):
+        if self.return_means:
+            return torch.zeros_like(self.scale[..., 0]).expand(n, -1, -1)
         return self.distr.rsample((n,))
+
+    def deterministic(self):
+        """Set to return means."""
+        self.return_means = True
 
 
 class AlgebraMean(nn.Module):
@@ -224,6 +252,7 @@ class SO3reparameterize(nn.Module):
         self.input_dim = self.reparameterize.input_dim
         assert self.reparameterize.z_dim == 3
         self.k = k
+        self.return_means = False
 
     @staticmethod
     def _lieAlgebra(v):
@@ -299,8 +328,13 @@ class SO3reparameterize(nn.Module):
         
 
     def nsample(self, n=1):
+        if self.return_means:
+            return self.mu_lie.expand(n, *[-1]*len(self.mu_lie.shape))
         # reproduce the decomposition of L-D we make
         v_lie = SO3reparameterize._expmap_rodrigues(self.v)
         return self.mu_lie @ v_lie
-    
 
+    def deterministic(self):
+        """Set to return means."""
+        self.return_means = True
+        self.reparameterize.deterministic()
