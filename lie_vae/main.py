@@ -126,14 +126,12 @@ def main():
             else:
                 break
     log.close()
- 
-    print('Computing LL..')
 
-    model = model.eval()
-
-    test_dataset = DataLoader(test_dataset, batch_size=4, shuffle=True, num_workers=5)
-
-    print('LL: {:.2f}'.format(np.mean([model.log_likelihood(batch[-1].to(device), n=500).data.cpu().numpy() for batch in test_dataset])))
+    if not args.beta == 0:
+        print('Computing LL..')
+        model = model.eval()
+        test_dataset = DataLoader(test_dataset, batch_size=4, shuffle=True, num_workers=5)
+        print('LL: {:.2f}'.format(np.mean([model.log_likelihood(batch[-1].to(device), n=500).data.cpu().numpy() for batch in test_dataset])))
 
 
 def parse_args():
