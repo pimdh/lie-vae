@@ -223,7 +223,7 @@ class ChairsVAE(VAE):
         elif encode_mode == 'toy':
             self.encoder = nn.Sequential(
                 Flatten(),
-                MLP((degrees+1)**2 * rep_copies, group_reparam_in_dims, 100, 4)
+                MLP((degrees+1)**2 * rep_copies, group_reparam_in_dims, 100, 2)
             )
         else:
             raise ValueError('Wrong encode mode')

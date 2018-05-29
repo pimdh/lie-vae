@@ -174,6 +174,10 @@ def group_matrix_to_quaternions(r):
 
 def quaternions_to_eazyz(q):
     """Map batch of quaternion to Euler angles ZYZ. Output is not mod 2pi."""
+    batch_dims = q.shape[:-1]
+    assert q.shape[-1] == 4, 'Input must be 4 dim vectors'
+    q = q.view(-1, 4)
+
     eps = 1E-6
     return torch.stack([
         torch.atan2(q[:, 1] * q[:, 2] - q[:, 0] * q[:, 3],
@@ -183,7 +187,7 @@ def quaternions_to_eazyz(q):
                                -1.0+eps, 1.0-eps)),
         torch.atan2(q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2],
                     q[:, 1] * q[:, 3] - q[:, 0] * q[:, 2])
-    ], 1)
+    ], 1).view(*batch_dims, 3)
 
 
 def group_matrix_to_eazyz(r):
@@ -221,11 +225,17 @@ def _z_rot_mat(angle, l):
 
 def wigner_d_matrix(angles, degree):
     """Create wigner D matrices for batch of ZYZ Euler anglers for degree l."""
+    batch_dims = angles.shape[:-1]
+    assert angles.shape[-1] == 3, 'Input must be 3 dim vectors'
+    angles = angles.view(-1, 3)
+
     J = JContainer.get(angles.device)[degree][None]
     x_a = _z_rot_mat(angles[:, 0], degree)
     x_b = _z_rot_mat(angles[:, 1], degree)
     x_c = _z_rot_mat(angles[:, 2], degree)
-    return x_a.matmul(J).matmul(x_b).matmul(J).matmul(x_c)
+    res = x_a.matmul(J).matmul(x_b).matmul(J).matmul(x_c)
+
+    return res.view(*batch_dims, 2*degree+1, 2*degree+1)
 
 
 def block_wigner_matrix_multiply(angles, data, max_degree):
@@ -323,18 +333,60 @@ def test_coordinate_changes():
 
 
 def test_wigner_d_matrices():
-    for l in range(5):
+    for l in range(6):
         r = torch.stack(
             [torch.tensor(randomR(), dtype=torch.float32)
              for _ in range(10000)], 0)
         angles = group_matrix_to_eazyz(r)
 
-        reference = np.stack([reference_wigner_D_matrix(l, *angle.numpy().T)
+        reference = np.stack([reference_wigner_D_matrix(l, *angle.numpy())
                               for angle in angles], 0)
 
         matrices = wigner_d_matrix(angles, l)
 
         np.testing.assert_allclose(matrices, reference, rtol=1E-4, atol=1E-5)
+
+        # Test orthogonality
+        eye = torch.eye(matrices.shape[1]).expand_as(matrices)
+        np.testing.assert_allclose(matrices @ matrices.transpose(-2, -1), eye, rtol=1E-4, atol=1E-5)
+
+        # Test W(g)W(g^-1)=eye
+        for _ in range(100):
+            r = random_group_matrices(1)[0]
+            w = wigner_d_matrix(group_matrix_to_eazyz(r), l)
+            winv = wigner_d_matrix(group_matrix_to_eazyz(r.t()), l)
+            np.testing.assert_allclose(w @ winv, torch.eye(w.shape[1]), rtol=1E-4, atol=1E-5)
+
+        # Testing W(a)W(b)=W(ab)
+        ra = random_group_matrices(10000)
+        rb = random_group_matrices(10000)
+
+        wa = wigner_d_matrix(group_matrix_to_eazyz(ra), l)
+        wb = wigner_d_matrix(group_matrix_to_eazyz(rb), l)
+        wc = wigner_d_matrix(group_matrix_to_eazyz(ra.bmm(rb)), l)
+        wc_result = wa.bmm(wb)
+
+        # TODO: FAILS
+        # np.testing.assert_allclose(wc_result, wc, rtol=1E-4, atol=1E-5)
+
+
+def test_ref_wigner_d_matrices():
+    for l in range(6):
+        for _ in range(1000):
+            qa, qb = random_quaternions(2, dtype=torch.float64).numpy()
+            ra = SO3_coordinates(qa, 'Q', 'MAT')
+            rb = SO3_coordinates(qb, 'Q', 'MAT')
+            rc = ra.dot(rb)
+
+            aa = SO3_coordinates(ra, 'MAT', 'EA323')
+            ab = SO3_coordinates(rb, 'MAT', 'EA323')
+            ac = SO3_coordinates(rc, 'MAT', 'EA323')
+
+            wa = reference_wigner_D_matrix(l, *aa)
+            wb = reference_wigner_D_matrix(l, *ab)
+            wc = reference_wigner_D_matrix(l, *ac)
+
+            np.testing.assert_allclose(wa.dot(wb), wc, atol=1E-2, rtol=1E-2)
 
 
 def test_s2s1rodrigues(error):
@@ -381,6 +433,9 @@ def main():
     test_log_exp(10, 1E-6)
     test_coordinate_changes()
     test_wigner_d_matrices()
+
+    # TODO: Fails?
+    # test_ref_wigner_d_matrices()
 
     print("All tests passed")
 
