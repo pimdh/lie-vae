@@ -133,7 +133,10 @@ def main():
         print('Computing LL..')
         model = model.eval()
         test_dataset = DataLoader(test_dataset, batch_size=4, shuffle=True, num_workers=5)
-        print('LL: {:.2f}'.format(np.mean([model.log_likelihood(batch[-1].to(device), n=500).data.cpu().numpy() for batch in test_dataset])))
+        ll = np.mean([model.log_likelihood(batch[-1].to(device), n=500).data.cpu().numpy() for batch in test_dataset])
+        print('LL: {:.2f}'.format(ll))
+        with open('ll.txt', 'a') as f:
+            f.write("{} : {:4f}\n".format(args.name, ll))
 
 
 def parse_args():
