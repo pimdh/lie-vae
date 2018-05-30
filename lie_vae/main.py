@@ -44,7 +44,8 @@ def main():
         dataset = SphereCubeDataset(subsample=args.subsample)
     elif args.dataset == 'toy':
         dataset = ToyDataset()
-        item_rep = dataset[0][1]
+        if args.fixed_spectrum:
+            item_rep = dataset[0][1]
     else:
         raise RuntimeError('Wrong dataset')
     if not len(dataset):
@@ -191,6 +192,8 @@ def parse_args():
                         help='Let reparametrizers return means.')
     parser.add_argument('--wigner_transpose', action='store_true',
                         help='Take tranposed wigner matrices')
+    parser.add_argument('--fixed_spectrum', action='store_true',
+                        help='For Toy experiment, use ground truth specturm')
 
     return parser.parse_args()
 

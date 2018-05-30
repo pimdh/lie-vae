@@ -167,7 +167,7 @@ class ToyDataset(TensorDataset):
         torch.manual_seed(0)
         torch.cuda.manual_seed(0)
         harmonics = torch.randn((degrees+1)**2, rep_copies, device=device)
-        harmonics = harmonics / harmonics.norm()
+        harmonics = harmonics / harmonics.norm() * 10
         xs, qs = [], []
         for i in range(0, n, batch_size):
             batch_n = min(i + batch_size, n)-i
