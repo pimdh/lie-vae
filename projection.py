@@ -49,7 +49,8 @@ def main():
     # load image
     x = imread("earth128.jpg").astype(np.float32).transpose((2, 0, 1)) / 255
     b = 64
-    grid = torch.tensor(orthographic_grid(200, 200), dtype=torch.float, device="cuda")[None]
+    grid = orthographic_grid(200, 200, r=0.8)
+    grid = torch.tensor(grid, dtype=torch.float, device="cuda")[None]
 
     x = torch.tensor(x, dtype=torch.float, device="cuda")
     x = x.view(1, 3, 2 * b, 2 * b)

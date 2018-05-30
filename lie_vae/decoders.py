@@ -1,8 +1,12 @@
 import torch
 from torch import nn as nn
+import torch.nn.functional as F
+from s2cnn.soft.gpu.s2_fft import S2_ifft_real
+from s2cnn.utils.complex import as_complex
 
-from .lie_tools import block_wigner_matrix_multiply, group_matrix_to_eazyz
-from .utils import MLP
+from .lie_tools import block_wigner_matrix_multiply, group_matrix_to_eazyz, \
+    complex_block_wigner_matrix_multiply
+from .utils import MLP, orthographic_grid, expand_dim
 
 
 class ActionNet(nn.Module):
@@ -118,3 +122,35 @@ class MLPNet(nn.Module):
             x = torch.cat((x, content_data.view(n, -1)), 1)
 
         return self.deconv(self.mlp(x))
+
+
+class ProjectionDecoder(nn.Module):
+    def __init__(self, degrees, deconv, rep_copies=10, projection_size=64,
+                 item_rep=None, r=0.8):
+        super().__init__()
+        self.deconv = deconv
+        self.degrees = degrees
+        self.rep_copies = rep_copies
+        self.matrix_dims = (degrees + 1) ** 2
+        grid = orthographic_grid(projection_size, projection_size, r=r)
+        self.register_buffer('grid', torch.tensor(grid, dtype=torch.float32))
+        self.ifft = S2_ifft_real()
+
+        if item_rep is None:
+            self.spectrum = nn.Parameter(torch.randn((self.matrix_dims, rep_copies, 2)))
+        else:
+            if item_rep.dim() == 2:
+                item_rep = as_complex(item_rep)
+            self.register_buffer('spectrum', item_rep)
+
+    def forward(self, angles, _=None):
+        n = angles.shape[0]
+        spectrum = expand_dim(self.spectrum, n)
+        rotated_spectrum = complex_block_wigner_matrix_multiply(
+            angles, spectrum, self.degrees)
+        rotated_signal = self.ifft(rotated_spectrum.transpose(0, 1).contiguous())
+
+        grid = expand_dim(self.grid, n)
+        projection = F.grid_sample(rotated_signal, grid)
+
+        return self.deconv(projection)

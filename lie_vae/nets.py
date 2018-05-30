@@ -193,6 +193,22 @@ class ChairsDeconvNetUpsample4(nn.Sequential):
         )
 
 
+class ChairProjDeconvNet(nn.Sequential):
+    def __init__(self, in_channels, hidden_dims, rgb=False):
+        out_dims = 3 if rgb else 1
+        super().__init__(
+            nn.Conv2d(in_channels, hidden_dims, 5, 1, 2),
+            nn.ReLU(),
+            nn.Conv2d(hidden_dims, hidden_dims, 5, 1, 2),
+            nn.ReLU(),
+            nn.Conv2d(hidden_dims, hidden_dims, 5, 1, 2),
+            nn.ReLU(),
+            nn.Conv2d(hidden_dims, hidden_dims, 5, 1, 2),
+            nn.ReLU(),
+            nn.Conv2d(hidden_dims, out_dims, 5, 1, 2),
+        )
+
+
 class CubesConvNet(nn.Sequential):
     def __init__(self):
         ndf = 16

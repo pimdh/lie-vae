@@ -4,8 +4,8 @@ import numpy as np
 
 from .nets import CubesConvNet, CubesDeconvNet, ChairsConvNet, ChairsDeconvNet, \
     ChairsDeconvNetUpsample, CubesConvNetBN, ChairsConvNetBN, ChairsDeconvNet4, \
-    ChairsDeconvNet8, ChairsThinNet
-from .decoders import MLPNet, ActionNet
+    ChairsDeconvNet8, ChairsThinNet, ChairProjDeconvNet
+from .decoders import MLPNet, ActionNet, ProjectionDecoder
 from .reparameterize import  SO3reparameterize, N0reparameterize, \
     Nreparameterize, Sreparameterize, N0Fullreparameterize, \
     AlgebraMean, QuaternionMean, QRMean, S2S1Mean, S2S2Mean
@@ -276,7 +276,9 @@ class ChairsVAE(VAE):
 
         # Setup decoder
         matrix_dims = (degrees + 1) ** 2
-        if deconv_mode == 'deconv':
+        if decoder_mode == 'proj':
+            deconv = ChairProjDeconvNet(rep_copies, deconv_hidden, rgb)
+        elif deconv_mode == 'deconv':
             deconv = ChairsDeconvNet(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
         elif deconv_mode == 'deconv4':
             deconv = ChairsDeconvNet4(matrix_dims * rep_copies, deconv_hidden, rgb=rgb)
@@ -309,6 +311,12 @@ class ChairsVAE(VAE):
                 content_dims=content_dims,
                 rep_copies=rep_copies,
                 single_id=single_id)
+        elif self.decoder_mode == 'proj':
+            assert single_id, "Single ID required for projection decoder"
+            self.decoder = ProjectionDecoder(
+                degrees=degrees,
+                deconv=deconv,
+                rep_copies=rep_copies)
         else:
             raise RuntimeError()
 
@@ -319,7 +327,7 @@ class ChairsVAE(VAE):
         if z_content is not None:
             z_content = z_content.view(-1, *z_content.shape[2:])
 
-        if self.decoder_mode == "action":
+        if self.decoder_mode == "action" or self.decoder_mode == 'proj':
             if self.latent_mode == "so3" or self.latent_mode == 'so3f':
                 angles = group_matrix_to_eazyz(z_pose)
             elif self.latent_mode == "normal" or self.latent_mode == "vmf":
