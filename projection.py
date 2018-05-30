@@ -4,8 +4,11 @@ from matplotlib.pyplot import imread
 
 import torch
 from s2cnn import so3_rotation
+from s2cnn.soft.gpu.s2_fft import S2_fft_real, S2_ifft_real
 import torch.nn.functional as F
 
+from lie_vae.utils import orthographic_grid
+from lie_vae.lie_tools import complex_block_wigner_matrix_multiply
 
 def s2_rotation(x, a, b, c):
     x = so3_rotation(x.view(*x.size(), 1).expand(*x.size(), x.size(-1)), a, b, c)
@@ -42,35 +45,6 @@ def plot(x, text, normalize=False):
              color='white', fontsize=20)
 
 
-def orthographic_grid(n_x, n_y):
-    xs = np.linspace(start=-1, stop=1, num=n_x, endpoint=True)
-    ys = np.linspace(start=-1, stop=1, num=n_y, endpoint=True)
-
-    y, x = np.meshgrid(ys, xs, indexing='ij')
-
-    rho = np.sqrt(x**2 + y**2)
-
-    # Use NaN propagation to make coords outside circle NaN
-    rho = np.where(rho > 1, np.nan, rho)
-    c = np.arcsin(rho)
-
-    a0 = 0
-    b0 = 0
-    b = np.arcsin(np.cos(c) * np.sin(b0) + y * np.sin(c) * np.cos(b0) / rho)
-    a = a0 + np.arctan2(x * np.sin(c), rho * np.cos(c) * np.cos(b0) - y * np.sin(c) * np.sin(b0))
-
-    # Map to [-1, 1]
-    b_hat = 2 * b / np.pi
-    a_hat = a / np.pi
-
-    # Create grid of (alpha,beta) coordinates.
-    grid = np.stack((a_hat, b_hat), -1)
-
-    # Map NaN coords to points outsize [-1, 1] so PyTorch makes it 0.
-    grid = np.where(np.isnan(grid), -2, grid)
-    return grid
-
-
 def main():
     # load image
     x = imread("earth128.jpg").astype(np.float32).transpose((2, 0, 1)) / 255
@@ -79,7 +53,6 @@ def main():
 
     x = torch.tensor(x, dtype=torch.float, device="cuda")
     x = x.view(1, 3, 2 * b, 2 * b)
-
 
     abc = (30 / 180 * np.pi, 50 / 180 * np.pi, 0)  # rotation angles
 
@@ -93,7 +66,12 @@ def main():
     plot(proj, "projected")
 
     plt.subplot(2, 2, 3)
-    rot = s2_rotation(x, *abc)
+    ref_rot = s2_rotation(x, *abc)
+    angles = torch.tensor(abc, dtype=torch.float, device='cuda')[None]
+    spectra = S2_fft_real()(x).transpose(0, 1)  # [d**2, b, c, 2]->[b, d**2, c, 2]
+    rotated_spectra = complex_block_wigner_matrix_multiply(angles, spectra, b-1)
+    rot = S2_ifft_real()(rotated_spectra.transpose(0, 1).contiguous())
+    print((rot - ref_rot).abs().max())
     plot(rot, "R(x) : rotation using fft")
 
     plt.subplot(2, 2, 4)

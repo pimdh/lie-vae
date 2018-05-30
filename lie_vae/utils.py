@@ -232,3 +232,77 @@ def cycle(iterable):
     while True:
         for x in iterable:
             yield x
+
+
+def orthographic_grid(n_x, n_y, r=1.0, a0=None, b0=None, device=None):
+    """Grid of orthographic projection of sphere.
+
+    Assume spherical signal is x=alpha in [0,2pi], y=beta in [0,pi].
+
+    Made for use with torch.nn.functional.grid_sample
+    """
+    xs = np.linspace(start=-1, stop=1, num=n_x, endpoint=True)
+    ys = np.linspace(start=-1, stop=1, num=n_y, endpoint=True)
+
+    y, x = np.meshgrid(ys, xs, indexing='ij')
+
+    y = torch.tensor(y, dtype=torch.float32, device=device)
+    x = torch.tensor(x, dtype=torch.float32, device=device)
+
+    rho = torch.sqrt(x**2 + y**2)
+
+    # Use NaN propagation to make coords outside circle NaN
+    rho = torch.where(rho > r, torch.full_like(rho, np.nan), rho)
+    c = torch.asin(rho / r)
+
+    a0 = a0 or torch.zeros_like(c)
+    b0 = b0 or torch.zeros_like(c)
+    b = torch.asin(torch.cos(c) * torch.sin(b0) + y * torch.sin(c) * torch.cos(b0) / rho)
+    a = a0 + torch.atan2(x * torch.sin(c), rho * torch.cos(c) * torch.cos(b0) - y * torch.sin(c) * torch.sin(b0))
+
+    # Map to [-1, 1]
+    b_hat = 2 * b / np.pi
+    a_hat = a / np.pi
+
+    # Create grid of (alpha,beta) coordinates.
+    grid = torch.stack((a_hat, b_hat), -1)
+
+    # Map NaN coords to points outsize [-1, 1] so PyTorch makes it 0.
+    grid = torch.where(torch.isnan(grid), torch.full_like(grid, -2), grid)
+    return grid
+
+
+def complex_bmm(x, y, conj_x=False, conj_y=False):
+    '''
+    :param x: [b, i, k, complex] (B, M, K, 2)
+    :param y: [b, k, j, complex] (B, K, N, 2)
+    :return:  [b, i, j, complex] (B, M, N, 2)
+    '''
+    xr = x[..., 0]
+    xi = x[..., 1]
+
+    yr = y[..., 0]
+    yi = y[..., 1]
+
+    if not conj_x and not conj_y:
+        zr = torch.bmm(xr, yr) - torch.bmm(xi, yi)
+        zi = torch.bmm(xr, yi) + torch.bmm(xi, yr)
+    elif conj_x and not conj_y:
+        zr = torch.bmm(xr, yr) + torch.bmm(xi, yi)
+        zi = torch.bmm(xr, yi) - torch.bmm(xi, yr)
+    elif not conj_x and conj_y:
+        zr = torch.bmm(xr, yr) + torch.bmm(xi, yi)
+        zi = torch.bmm(xi, yr) - torch.bmm(xr, yi)
+    elif conj_x and conj_y:
+        zr = torch.bmm(xr, yr) - torch.bmm(xi, yi)
+        zi = - torch.bmm(xr, yi) - torch.bmm(xi, yr)
+    else:
+        raise RuntimeError()
+
+    return torch.stack((zr, zi), -1)
+
+
+def expand_dim(x, n, dim=0):
+    if dim < 0:
+        dim = x.dim()+dim+1
+    return x.unsqueeze(dim).expand(*[-1]*dim, n, *[-1]*(x.dim()-dim))

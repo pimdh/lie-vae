@@ -3,30 +3,41 @@ import torch
 import torch.nn.functional as F
 import math
 from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
-from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense \
-    import Jd as Jd_np
 from lie_learn.representations.SO3.wigner_d import \
     wigner_D_matrix as reference_wigner_D_matrix
+from lie_learn.representations.SO3.irrep_bases import change_of_basis_matrix
+from s2cnn.utils.complex import as_complex
 
+from lie_vae.utils import complex_bmm, expand_dim
 from .utils import randomR
+from functools import lru_cache
 
 
-class JContainer:
-    data = {}
+@lru_cache(maxsize=256)
+def j_matrix(l, device=None):
+    from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense \
+        import Jd as Jd_np
+    return torch.tensor(Jd_np[l], dtype=torch.float32, device=torch.device(device))
 
-    @classmethod
-    def get(cls, device):
-        if str(device) in cls.data:
-            return cls.data[str(device)]
 
-        from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense \
-            import Jd as Jd_np
+@lru_cache(maxsize=256)
+def complex_b_matrix(l, device=None):
+    mat = change_of_basis_matrix(
+            l,
+            frm=('real', 'quantum', 'centered', 'cs'),
+            to=('complex', 'quantum', 'centered', 'cs'))
+    mat = mat.astype(np.complex64).view(np.float32).reshape((2 * l + 1, 2 * l + 1, 2))
+    return torch.tensor(mat, dtype=torch.float32, device=torch.device(device))
 
-        device_data = [torch.tensor(J, dtype=torch.float32, device=device)
-                       for J in Jd_np]
-        cls.data[str(device)] = device_data
 
-        return device_data
+@lru_cache(maxsize=256)
+def complex_bb_matrix(l, device=None):
+    mat = change_of_basis_matrix(
+        l,
+        frm=('complex', 'quantum', 'centered', 'cs'),
+        to=('real', 'quantum', 'centered', 'cs'))
+    mat = mat.astype(np.complex64).view(np.float32).reshape((2 * l + 1, 2 * l + 1, 2))
+    return torch.tensor(mat, dtype=torch.float32, device=torch.device(device))
 
 
 def map2LieAlgebra(v):
@@ -229,7 +240,7 @@ def wigner_d_matrix(angles, degree):
     assert angles.shape[-1] == 3, 'Input must be 3 dim vectors'
     angles = angles.view(-1, 3)
 
-    J = JContainer.get(angles.device)[degree][None]
+    J = j_matrix(degree, str(angles.device))
     x_a = _z_rot_mat(angles[:, 0], degree)
     x_b = _z_rot_mat(angles[:, 1], degree)
     x_c = _z_rot_mat(angles[:, 2], degree)
@@ -238,23 +249,31 @@ def wigner_d_matrix(angles, degree):
     return res.view(*batch_dims, 2*degree+1, 2*degree+1)
 
 
-def block_wigner_matrix_multiply(angles, data, max_degree, transpose=False):
-    """Transform data using wigner d matrices for all degrees.
+def complex_wigner_d_matrix(angles, degree):
+    n = angles.shape[0]
+    d = as_complex(wigner_d_matrix(angles, degree))
+    b = expand_dim(complex_b_matrix(degree, str(angles.device)), n)
+    bb = expand_dim(complex_bb_matrix(degree, str(angles.device)), n)
+    return complex_bmm(complex_bmm(b, d), bb)
 
-    vector_dim is dictated by max_degree by the expression:
-    vector_dim = \sum_{i=0}^max_degree (2 * max_degree + 1) = (max_degree+1)^2
+
+def block_wigner_matrix_multiply(angles, spectrum, max_degree, transpose=False):
+    """Transform spectrum using wigner d matrices for all degrees.
+
+    spectrum_dim is dictated by max_degree by the expression:
+    spectrum_dim = \sum_{i=0}^max_degree (2 * max_degree + 1) = (max_degree+1)^2
 
     The representation is the direct sum of the irreps of the degrees up to max.
     The computation is equivalent to a block-wise matrix multiply.
 
-    The data are the Fourier modes of a R^{data_dim} signal.
+    The spectrum are the Fourier modes of a R^{channels} signal.
 
     Input:
     - angles (batch, 3)  ZYZ Euler angles
-    - vector (batch, vector_dim, data_dim)
+    - spectrum (batch, spectrum_dim, channels)
     - transpose whether to use transpose wigner matrices
 
-    Output: (batch, vector_dim, data_dim)
+    Output: (batch, spectrum_dim, channels)
     """
     outputs = []
     start = 0
@@ -263,7 +282,38 @@ def block_wigner_matrix_multiply(angles, data, max_degree, transpose=False):
         matrix = wigner_d_matrix(angles, degree)
         if transpose:
             matrix = matrix.transpose(-2, -1)
-        outputs.append(matrix.bmm(data[:, start:start+dim, :]))
+        outputs.append(matrix.bmm(spectrum[:, start:start + dim, :]))
+        start += dim
+    return torch.cat(outputs, 1)
+
+
+def complex_block_wigner_matrix_multiply(angles, spectrum, max_degree):
+    """Transform complex spectrum using wigner d matrices for all degrees.
+
+    spectrum_dim is dictated by max_degree by the expression:
+    spectrum_dim = \sum_{i=0}^max_degree (2 * max_degree + 1) = (max_degree+1)^2
+
+    The representation is the direct sum of the irreps of the degrees up to max.
+    The computation is equivalent to a block-wise matrix multiply.
+
+    The spectrum are the Fourier modes of a C^{channels} signal.
+
+    The 2 in the in/output are the complex components.
+
+    Input:
+    - angles (batch, 3)  ZYZ Euler angles
+    - spectrum (batch, spectrum_dim, channels, 2)
+
+    Output: (batch, spectrum_dim, channels, 2)
+    """
+    outputs = []
+    start = 0
+    for degree in range(max_degree+1):
+        dim = 2 * degree + 1
+        matrix = complex_wigner_d_matrix(angles, degree)
+        degree_slice = spectrum[:, start:start + dim]
+        z = complex_bmm(matrix, degree_slice, conj_x=True)
+        outputs.append(z)
         start += dim
     return torch.cat(outputs, 1)
 
@@ -438,6 +488,29 @@ def test_s2s2_gram_schmidt():
     np.testing.assert_allclose(r.bmm(r.transpose(1, 2)), I, rtol=1E-6, atol=1E-6)
 
 
+def ref_s2_rotation(x, a, b, c):
+    from s2cnn import so3_rotation
+    x = so3_rotation(x.view(*x.size(), 1).expand(*x.size(), x.size(-1)), a, b, c)
+    return x[..., 0]
+
+
+def test_complex_block_wigner_matrix_multiply():
+    from s2cnn.soft.gpu.s2_fft import S2_fft_real, S2_ifft_real
+    b = 20
+    n = 10
+    angles = quaternions_to_eazyz(random_quaternions(n, device='cuda'))
+    xs = torch.rand(n, 3, 2*b, 2*b, device='cuda')
+
+    refs = torch.stack([ref_s2_rotation(x[None], *a)[0] for x, a in zip(xs, angles)], 0)
+
+    spectra = S2_fft_real()(xs).transpose(0, 1)  # [d**2, b, c, 2]->[b, d**2, c, 2]
+    rotated_spectra = complex_block_wigner_matrix_multiply(angles, spectra, b-1)
+    rotated = S2_ifft_real()(rotated_spectra.transpose(0, 1).contiguous())
+
+    np.testing.assert_allclose(rotated, refs, atol=1E-5, rtol=1E-5)
+
+
+
 def main():
     np.random.seed(0)
     torch.manual_seed(0)
@@ -451,6 +524,7 @@ def main():
     test_coordinate_changes()
     test_wigner_d_matrices()
     test_ref_wigner_d_matrices()
+    test_complex_block_wigner_matrix_multiply()
 
     print("All tests passed")
 
