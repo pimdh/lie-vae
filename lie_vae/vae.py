@@ -195,6 +195,8 @@ class ChairsVAE(VAE):
             deterministic=False,
             item_rep=None,
             wigner_transpose=False,
+            mlp_layers=3,
+            mlp_hidden=50,
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()
@@ -310,7 +312,10 @@ class ChairsVAE(VAE):
                 deconv=deconv,
                 content_dims=content_dims,
                 rep_copies=rep_copies,
-                single_id=single_id)
+                single_id=single_id,
+                layers=mlp_layers,
+                hidden_dims=mlp_hidden,
+            )
         elif self.decoder_mode == 'proj':
             assert single_id, "Single ID required for projection decoder"
             self.decoder = ProjectionDecoder(

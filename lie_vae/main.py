@@ -197,6 +197,10 @@ def parse_args():
                         help='Take tranposed wigner matrices')
     parser.add_argument('--fixed_spectrum', action='store_true',
                         help='For Toy experiment, use ground truth specturm')
+    parser.add_argument('--mlp_hidden', type=int, default=50,
+                        help='Hidden dims of MLP decoder')
+    parser.add_argument('--mlp_layers', type=int, default=3,
+                        help='Layers of MLP decoder')
 
     return parser.parse_args()
 

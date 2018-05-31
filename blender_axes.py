@@ -3,11 +3,10 @@
 import argparse, sys, os
 import numpy as np
 import bpy
-import json
 
 parser = argparse.ArgumentParser()
 parser.add_argument('dir')
-parser.add_argument('quaternions')
+parser.add_argument('datafile')
 parser.add_argument('--size', type=int, default=500)
 argv = sys.argv[sys.argv.index("--") + 1:]
 args = parser.parse_args(argv)
@@ -38,8 +37,8 @@ scn.objects.active = b_empty
 
 scene.render.image_settings.quality = 90  # set output format to .png
 
-quaternions = json.loads(args.quaternions)
-quaternions = np.array(quaternions, dtype=np.float32).round(decimals=4)
+quaternions = np.load(args.datafile)
+
 assert len(quaternions.shape) == 2 and quaternions.shape[1] == 4, \
     "Parsed quaternions of incorrect shape {}".format(quaternions.shape)
 
@@ -50,6 +49,6 @@ for i, quaternion in enumerate(quaternions):
 
     b_empty.rotation_quaternion = tuple(float(x) for x in quaternion)
 
-    path = os.path.join(args.dir, './{:03}'.format(i, *quaternion))
+    path = os.path.join(args.dir, './{:04}'.format(i, *quaternion))
     scene.render.filepath = path
     bpy.ops.render.render(write_still=True)  # render still

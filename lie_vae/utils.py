@@ -152,7 +152,7 @@ class MLP(nn.Sequential):
 
 class View(nn.Module):
     def __init__(self, *v):
-        super(View, self).__init__()
+        super().__init__()
         self.v = v
 
     def forward(self, x):
@@ -161,7 +161,7 @@ class View(nn.Module):
 
 class Flatten(nn.Module):
     def __init__(self):
-        super(Flatten, self).__init__()
+        super().__init__()
 
     def forward(self, x):
         return x.view(x.size(0), -1)
