@@ -17,6 +17,9 @@ if not os.path.exists(args.dir):
 bpy.ops.wm.open_mainfile(filepath='axes.blend')
 
 scene = bpy.data.scenes[0]
+scene.render.resolution_x = args.size
+scene.render.resolution_y = args.size
+scene.render.resolution_percentage = 100
 origin = (0, 0, 0)
 b_empty = bpy.data.objects.new("Empty", None)
 b_empty.rotation_mode = 'QUATERNION'
