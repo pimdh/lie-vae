@@ -118,6 +118,9 @@ class Subset(Dataset):
     def __len__(self):
         return len(self.indices)
 
+    def __getattr__(self, item):
+        return getattr(self.dataset, item)
+
 
 def random_split(dataset, lengths):
     assert sum(lengths) == len(dataset)

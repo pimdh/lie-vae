@@ -13,6 +13,7 @@ from lie_vae.lie_tools import block_wigner_matrix_multiply, random_quaternions, 
 
 
 class ShapeDataset(Dataset):
+    num_workers = 5
     rgb = False
     single_id = False
 
@@ -141,6 +142,8 @@ class SphereCubeDataset(ShapeDataset):
 
 
 class CubeDataset(TensorDataset):
+    num_workers = 0
+
     def __init__(self, mode):
         assert mode in ['train', 'test', 'dev'], "Mode should be train|test|dev"
 
@@ -152,12 +155,13 @@ class CubeDataset(TensorDataset):
 
 
 class ToyDataset(TensorDataset):
+    num_workers = 0
     single_id = True
     rgb = False
 
-    def __init__(self, tensors=None, device=None):
+    def __init__(self, tensors=None, device=None, path='data/toy.pickle'):
         if tensors is None:
-            tensors = torch.load('data/toy.pickle')
+            tensors = torch.load(path)
         if device is not None:
             tensors = [t.to(device) for t in tensors]
         super().__init__(*tensors)
@@ -180,5 +184,5 @@ class ToyDataset(TensorDataset):
                             torch.cat(xs, 0)),
                    device=device)
 
-    def save(self):
-        torch.save(self.tensors, 'data/toy.pickle')
+    def save(self, path='data/toy.pickle'):
+        torch.save(self.tensors, path)

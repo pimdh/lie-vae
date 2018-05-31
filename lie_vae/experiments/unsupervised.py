@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 from time import time
 from lie_vae.continuity_loss import ContinuityLoss
 
@@ -17,9 +17,11 @@ class UnsupervisedExperiment:
         self.optimizer = optimizer
         self.beta_schedule = beta_schedule
         self.train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=True, num_workers=5)
+            train_dataset, batch_size=batch_size, shuffle=True,
+            num_workers=train_dataset.num_workers)
         self.test_loader = DataLoader(
-            test_dataset, batch_size=batch_size, shuffle=True, num_workers=5)
+            test_dataset, batch_size=batch_size, shuffle=True,
+            num_workers=test_dataset.num_workers)
         self.elbo_samples = elbo_samples
         self.clip_grads = clip_grads
         self.selective_clip = selective_clip
