@@ -22,6 +22,7 @@ class VAE(nn.Module):
         self.decoder = None
         self.reparameterize = []
         self.r_callback = None
+        self.z = None
 
     def encode(self, x, n=1):
         h = self.encoder(x)
@@ -44,13 +45,14 @@ class VAE(nn.Module):
 
     def forward(self, x, n=1):
         z = self.encode(x, n=n)
+        self.z = z  # Store encoding for outsize access
 
         # we do not stack anymore to allow the decoder to use differently each input
 
         return self.decode(*z)
 
     def recon_loss(self, x_recon, x):
-        raise NotImplemented
+        raise NotImplementedError()
 
     def elbo(self, x, n=1):
         x_recon = self.forward(x, n)
@@ -62,7 +64,7 @@ class VAE(nn.Module):
 
     def log_likelihood(self, x, n=1):
         x_recon = self.forward(x, n)
-  
+
         log_p_z = torch.cat([r.log_prior() for r in self.reparameterize], -1).to(x.device)
         log_q_z_x = torch.cat([r.log_posterior() for r in self.reparameterize], -1).to(x.device)
         log_p_x_z = - self.recon_loss(x_recon, x)

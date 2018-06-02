@@ -1,12 +1,12 @@
-import torch
-import torch.nn as nn
 import os.path
 from pprint import pprint
-from tensorboardX import SummaryWriter
 import argparse
 from math import pi
-import numpy as np
+import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
+from tensorboardX import SummaryWriter
+import numpy as np
 
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
     HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset, \
@@ -30,11 +30,11 @@ def main():
 
     item_rep = None  # Possibly given fixed harmonics
     if args.dataset == 'objects':
-        dataset = ObjectsDataset(subsample=args.subsample)
+        dataset = ObjectsDataset()
     elif args.dataset == 'objects3':
-        dataset = ThreeObjectsDataset(subsample=args.subsample)
+        dataset = ThreeObjectsDataset()
     elif args.dataset == 'chairs':
-        dataset = SelectedDataset(subsample=args.subsample)
+        dataset = SelectedDataset()
     elif args.dataset == 'humanoid':
         dataset = HumanoidDataset(subsample=args.subsample)
     elif args.dataset == 'chumanoid':
@@ -49,7 +49,7 @@ def main():
             item_rep = dataset[0][1]
     else:
         raise RuntimeError('Wrong dataset')
-    if not len(dataset):
+    if len(dataset) == 0:  #pylint: disable=C1801
         raise RuntimeError('Dataset empty')
 
     mlp_activation = {
@@ -90,8 +90,9 @@ def main():
 
     split = [num_valid, num_test, len(dataset) - num_valid - num_test]
     valid_dataset, test_dataset, train_dataset = random_split(dataset, split)
-    
-    print('Datset splits: train={}, valid={}, test={}'.format(len(train_dataset), len(valid_dataset), len(test_dataset)))
+
+    print('Datset splits: train={}, valid={}, test={}'.format(
+        len(train_dataset), len(valid_dataset), len(test_dataset)))
 
     optimizer = torch.optim.Adam(model.parameters())
 
@@ -117,11 +118,12 @@ def main():
         report_freq=args.report_freq,
         clip_grads=args.clip_grads,
         selective_clip=args.selective_clip,
+        equivariance_lamb=args.equivariance,
         continuity_lamb=args.continuity,
         continuity_scale=2*pi/args.continuity_iscale,
         **exp_kwargs
     )
-   
+
     early_stop_counter = 0
     for epoch in range(args.continue_epoch, args.epochs):
         previous_best_value = experiment.best_value
@@ -143,7 +145,8 @@ def main():
         print('Computing LL..')
         model = model.eval()
         test_dataset = DataLoader(test_dataset, batch_size=4, shuffle=True, num_workers=5)
-        ll = np.mean([model.log_likelihood(batch[-1].to(device), n=500).data.cpu().numpy() for batch in test_dataset])
+        ll = np.mean([model.log_likelihood(batch[-1].to(device), n=500).data.cpu().numpy()
+                      for batch in test_dataset])
         print('LL: {:.2f}'.format(ll))
         with open('ll.txt', 'a') as f:
             f.write("{} : {:4f}\n".format(args.name, ll))
@@ -194,9 +197,11 @@ def parse_args():
     parser.add_argument('--continuity_iscale', type=float, default=200,
                         help='Inverse algebra distance with which continuity'
                              'is measured. Distance is 2pi/iscale.')
+    parser.add_argument('--equivariance', type=float,
+                        help='Strength of equivariance loss')
     parser.add_argument('--max_early_stop', type=int, default=50,
-                    help='How many epochs to train without improvements'
-                         'before doing early stopping.')
+                        help='How many epochs to train without improvements'
+                        'before doing early stopping.')
     parser.add_argument('--subsample', type=float, default=1.,
                         help='Part of the dataset to subsample in [0,1].')
     parser.add_argument('--normal_dims', type=int, default=3,

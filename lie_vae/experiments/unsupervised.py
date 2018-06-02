@@ -1,8 +1,9 @@
+from time import time
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, TensorDataset
-from time import time
+from torch.utils.data import DataLoader
 from lie_vae.continuity_loss import ContinuityLoss
+from lie_vae.equivariance_loss import EquivarianceLoss
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -11,7 +12,8 @@ class UnsupervisedExperiment:
     def __init__(self, *, log, model, optimizer, beta_schedule,
                  train_dataset, test_dataset, elbo_samples=1,
                  report_freq=1250, clip_grads=None, selective_clip=False,
-                 batch_size=64, continuity_lamb=None, continuity_scale=None):
+                 batch_size=64, continuity_lamb=None, continuity_scale=None,
+                 equivariance_lamb=None):
         self.log = log
         self.model = model
         self.optimizer = optimizer
@@ -34,12 +36,17 @@ class UnsupervisedExperiment:
                 log=log, report_freq=report_freq)
         else:
             self.continuity_loss = None
+        if equivariance_lamb is not None:
+            self.equivariance_loss = EquivarianceLoss(
+                model, lamb=equivariance_lamb,
+                log=log, report_freq=report_freq)
+        else:
+            self.equivariance_loss = None
 
     def test(self):
         self.model.eval()
         losses = []
-        for it, (item_label, rot_label, img_label) in \
-                enumerate(self.test_loader):
+        for _, _, img_label in self.test_loader:
             img_label = img_label.to(device)
             recon, kl, kls = self.model.elbo(img_label, n=self.elbo_samples)
             losses.append((recon.mean().item(), kl.mean().item(),
@@ -50,7 +57,7 @@ class UnsupervisedExperiment:
         losses = []
         start = time()
         for it, batch in enumerate(self.train_loader):
-            item_label, rot_label, img_label = batch
+            _, _, img_label = batch
             self.model.train()
             img_label = img_label.to(device)
 
@@ -72,6 +79,10 @@ class UnsupervisedExperiment:
             if self.continuity_loss:
                 loss = loss + self.continuity_loss(global_it)
 
+            if self.equivariance_loss:
+                loss = loss + self.equivariance_loss(
+                    img_label, self.model.z[0][0], global_it)
+
             self.optimizer.zero_grad()
             loss.backward()
             if self.clip_grads:
@@ -85,7 +96,7 @@ class UnsupervisedExperiment:
 
             losses.append((recon.mean().item(), kl.mean().item(),
                            *[x.mean().item() for x in kls]))
-            
+
             if (it + 1) % self.report_freq == 0 or \
                     it + 1 == len(self.train_loader):
                 train_recon, train_kl, *train_kls = \
