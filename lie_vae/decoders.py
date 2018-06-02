@@ -101,14 +101,16 @@ class MLPNet(nn.Module):
                    of signal on sphere / columns of harmonics matrix
     """
     def __init__(self, degrees, deconv, in_dims=9, rep_copies=10,
-                 content_dims=10, single_id=True, layers=3, hidden_dims=50):
+                 content_dims=10, single_id=True, layers=3, hidden_dims=50,
+                 activation=nn.ReLU):
         super().__init__()
         matrix_dims = (degrees + 1) ** 2
 
         if not single_id:
             in_dims += content_dims
 
-        self.mlp = MLP(in_dims, matrix_dims * rep_copies, hidden_dims, layers)
+        self.mlp = MLP(in_dims, matrix_dims * rep_copies, hidden_dims, layers,
+                       activation)
         self.deconv = deconv
         self.single_id = single_id
 

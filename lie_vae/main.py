@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import os.path
 from pprint import pprint
 from tensorboardX import SummaryWriter
@@ -51,6 +52,12 @@ def main():
     if not len(dataset):
         raise RuntimeError('Dataset empty')
 
+    mlp_activation = {
+        'relu': nn.ReLU,
+        'softplus': nn.Softplus,
+        'tanh': nn.Tanh
+    }[args.mlp_activation]
+
     model = ChairsVAE(
         content_dims=args.content_dims,
         latent_mode=args.latent_mode,
@@ -68,6 +75,9 @@ def main():
         deterministic=args.deterministic,
         item_rep=item_rep,
         wigner_transpose=args.wigner_transpose,
+        mlp_layers=args.mlp_layers,
+        mlp_hidden=args.mlp_hidden,
+        mlp_activation=mlp_activation
     ).to(device)
 
     if args.continue_epoch > 0:
@@ -201,6 +211,8 @@ def parse_args():
                         help='Hidden dims of MLP decoder')
     parser.add_argument('--mlp_layers', type=int, default=3,
                         help='Layers of MLP decoder')
+    parser.add_argument('--mlp_activation', default='relu',
+                        help='Activation of MLP decoder')
 
     return parser.parse_args()
 

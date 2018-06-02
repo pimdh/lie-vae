@@ -197,6 +197,7 @@ class ChairsVAE(VAE):
             wigner_transpose=False,
             mlp_layers=3,
             mlp_hidden=50,
+            mlp_activation=nn.ReLU,
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()
@@ -226,7 +227,8 @@ class ChairsVAE(VAE):
         elif encode_mode == 'toy':
             self.encoder = nn.Sequential(
                 Flatten(),
-                MLP((degrees+1)**2 * rep_copies, group_reparam_in_dims, 100, 2)
+                MLP((degrees+1)**2 * rep_copies, group_reparam_in_dims, 100, 2,
+                    activation=mlp_activation)
             )
         else:
             raise ValueError('Wrong encode mode')
@@ -315,6 +317,7 @@ class ChairsVAE(VAE):
                 single_id=single_id,
                 layers=mlp_layers,
                 hidden_dims=mlp_hidden,
+                activation=mlp_activation,
             )
         elif self.decoder_mode == 'proj':
             assert single_id, "Single ID required for projection decoder"
