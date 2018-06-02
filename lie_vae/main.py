@@ -13,7 +13,7 @@ from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDatase
     ToyDataset
 from lie_vae.experiments import UnsupervisedExperiment, SemiSupervisedExperiment
 from lie_vae.vae import ChairsVAE
-from lie_vae.utils import random_split
+from lie_vae.utils import random_split, LinearSchedule
 from lie_vae.beta_schedule import get_beta_schedule
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -107,6 +107,11 @@ def main():
     else:
         raise RuntimeError('Wrong experiment')
 
+    if args.equivariance is not None:
+        equivariance = LinearSchedule(0, args.equivariance, 1000, args.equivariance_end_it)
+    else:
+        equivariance = None
+
     experiment = exp_cls(
         log=log,
         model=model,
@@ -118,7 +123,7 @@ def main():
         report_freq=args.report_freq,
         clip_grads=args.clip_grads,
         selective_clip=args.selective_clip,
-        equivariance_lamb=args.equivariance,
+        equivariance_lamb=equivariance,
         continuity_lamb=args.continuity,
         continuity_scale=2*pi/args.continuity_iscale,
         **exp_kwargs
@@ -199,6 +204,8 @@ def parse_args():
                              'is measured. Distance is 2pi/iscale.')
     parser.add_argument('--equivariance', type=float,
                         help='Strength of equivariance loss')
+    parser.add_argument('--equivariance_end_it', type=int, default=20000,
+                        help='It at which equivariance max')
     parser.add_argument('--max_early_stop', type=int, default=50,
                         help='How many epochs to train without improvements'
                         'before doing early stopping.')

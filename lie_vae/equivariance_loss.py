@@ -36,12 +36,15 @@ class EquivarianceLoss(nn.Module):
         self.diffs.append(diffs)
         mean = diffs.mean()
 
+        lamb = self.lamb(it)
+
         if self.log and (it+1) % self.report_freq == 0:
             agg_diffs = torch.cat(self.diffs)
             self.log.add_scalar('equivariance', agg_diffs.mean(), it+1)
+            self.log.add_scalar('equivariance_lamb', lamb, it+1)
             self.diffs = []
 
-        return mean * self.lamb
+        return mean * lamb
 
     @staticmethod
     def rotate(img, theta):
