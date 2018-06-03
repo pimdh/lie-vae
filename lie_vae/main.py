@@ -77,7 +77,8 @@ def main():
         wigner_transpose=args.wigner_transpose,
         mlp_layers=args.mlp_layers,
         mlp_hidden=args.mlp_hidden,
-        mlp_activation=mlp_activation
+        mlp_activation=mlp_activation,
+        fixed_sigma=args.fixed_sigma,
     ).to(device)
 
     if args.continue_epoch > 0:
@@ -225,6 +226,8 @@ def parse_args():
                         help='Layers of MLP decoder')
     parser.add_argument('--mlp_activation', default='relu',
                         help='Activation of MLP decoder')
+    parser.add_argument('--fixed_sigma', type=float,
+                        help='Optional fixed N0 sigma.')
 
     return parser.parse_args()
 

@@ -101,17 +101,23 @@ class Sreparameterize(nn.Module):
 
 class N0reparameterize(nn.Module):
 
-    def __init__(self, input_dim, z_dim):
+    def __init__(self, input_dim, z_dim, fixed_sigma=None):
         super(N0reparameterize, self).__init__()
 
         self.input_dim = input_dim
         self.z_dim = z_dim
         self.sigma_linear = nn.Linear(input_dim, z_dim)
         self.return_means = False
+        self.fixed_sigma = fixed_sigma
+
+        self.sigma = None
+        self.z = None
 
     def forward(self, x, n=1):
-        
-        self.sigma = F.softplus(self.sigma_linear(x)) 
+        if self.fixed_sigma is not None:
+            self.sigma = x.new_full((x.shape[0], self.z_dim), self.fixed_sigma)
+        else:
+            self.sigma = F.softplus(self.sigma_linear(x))
         self.z = self.nsample(n=n)
         return self.z
 

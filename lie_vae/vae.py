@@ -200,6 +200,7 @@ class ChairsVAE(VAE):
             mlp_layers=3,
             mlp_hidden=50,
             mlp_activation=nn.ReLU,
+            fixed_sigma=None,
     ):
         """See lie_vae/decoders.py for explanation of params."""
         super().__init__()
@@ -238,7 +239,8 @@ class ChairsVAE(VAE):
         # Setup latent space
         if self.latent_mode == 'so3' or self.latent_mode == 'so3f':
             if self.latent_mode == 'so3':
-                normal = N0reparameterize(group_reparam_in_dims, z_dim=3)
+                normal = N0reparameterize(group_reparam_in_dims, z_dim=3,
+                                          fixed_sigma=fixed_sigma)
             else:
                 normal = N0Fullreparameterize(group_reparam_in_dims, z_dim=3)
 
