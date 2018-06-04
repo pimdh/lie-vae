@@ -108,7 +108,10 @@ class N0reparameterize(nn.Module):
         self.z_dim = z_dim
         self.sigma_linear = nn.Linear(input_dim, z_dim)
         self.return_means = False
-        self.fixed_sigma = fixed_sigma
+        if fixed_sigma is not None:
+            self.register_buffer('fixed_sigma', torch.tensor(fixed_sigma))
+        else:
+            self.fixed_sigma = None
 
         self.sigma = None
         self.z = None
