@@ -51,9 +51,11 @@ scn.objects.active = b_empty
 
 scene.render.image_settings.quality = 90  # set output format to .png
 
+names = None
 if args.quaternions:
-    quaternions = json.loads(args.quaternions)
-    quaternions = np.array(quaternions, dtype=np.float32).round(decimals=4)
+    quaternions = np.load(args.quaternions)
+    if quaternions.dtype == [('quaternion', '<f4', (4,)), ('name', 'S50')]:
+        quaternions, names = quaternions['quaternion'], quaternions['name']
     assert len(quaternions.shape) == 2 and quaternions.shape[1] == 4, \
         "Parsed quaternions of incorrect shape {}".format(quaternions.shape)
 else:
@@ -67,6 +69,7 @@ else:
         np.sqrt(u1) * np.cos(2 * np.pi * u3),
     ), 1).round(decimals=4)
 
+
 # bpy.ops.render.render(write_still=True)
 for i, quaternion in enumerate(quaternions):
     quaternion = quaternions[i]
@@ -74,9 +77,11 @@ for i, quaternion in enumerate(quaternions):
 
     b_empty.rotation_quaternion = tuple(float(x) for x in quaternion)
 
-    if args.quaternions:
-        path = os.path.join(args.dir, './{:03}'.format(i, *quaternion))
+    if names is not None:
+        filename = names[i].decode('utf-8')
+    elif args.quaternions:
+        filename = '{:06}'.format(i)
     else:
-        path = os.path.join(args.dir, './{:.4f}_{:.4f}_{:.4f}_{:.4f}'.format(*quaternion))
-    scene.render.filepath = path
+        filename = '{:.4f}_{:.4f}_{:.4f}_{:.4f}'.format(*quaternion)
+    scene.render.filepath = os.path.join(args.dir, filename)
     bpy.ops.render.render(write_still=True)  # render still

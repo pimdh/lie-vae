@@ -26,26 +26,31 @@ class ShapeDataset(Dataset):
             self.root = directory
         else:
             self.files = glob(os.path.join(directory, '**/*.jpg'), recursive=True)
+            self.files += glob(os.path.join(directory, '**/*.png'), recursive=True)
             self.root = None
+        self.files = sorted(self.files)
 
-        seed = np.random.get_state()
-        np.random.seed(0)
-
-        self.files = np.random.choice(self.files, int(len(self.files) * subsample), replace=False)
-        np.random.set_state(seed)
+        if subsample < 1:
+            seed = np.random.get_state()
+            np.random.seed(0)
+            self.files = np.random.choice(self.files, int(len(self.files) * subsample), replace=False)
+            np.random.set_state(seed)
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, idx):
-
         filename = self.files[idx]
-        path = os.path.join(self.root, filename) if self.root else filename
+        return self.load_file(filename, self.root)
+
+    @classmethod
+    def load_file(cls, filename, root):
+        path = os.path.join(root, filename) if root else filename
         image = Image.open(path)
         image_tensor = torch.tensor(np.array(image), dtype=torch.float32) / 255
-        quaternion = self.filename_to_quaternion(filename)
+        quaternion = cls.filename_to_quaternion(filename)
 
-        if not self.rgb:
+        if not cls.rgb:
             if image_tensor.dim() == 3:  # Mean if RGB
                 image_tensor = image_tensor.mean(-1)
 
@@ -55,22 +60,28 @@ class ShapeDataset(Dataset):
 
         group_el = torch.tensor(SO3_coordinates(quaternion, 'Q', 'MAT'),
                                 dtype=torch.float32)
-        name = self.filename_to_name(filename)
+        name = 0 if cls.single_id else cls.filename_to_name(filename)
 
         return name, group_el, image_tensor
 
-    def filename_to_quaternion(self, filename):
+    @classmethod
+    def filename_to_quaternion(cls, filename):
         """Remove extension, then retrieve _ separated floats"""
         matches = re.findall(r'-?[01]\.[0-9]{4}', filename)
         assert len(matches) == 4, 'No quaternion found in '+filename
         return [float(x) for x in matches]
 
-    def filename_to_name(self, filename):
+    @classmethod
+    def filename_to_name(cls, filename):
         match = re.search(r'([A-z0-9]+)\.obj', filename)
 
         assert match is not None, 'Could not find object id from filename'
 
         return match.group(1)
+
+    @staticmethod
+    def prep_batch(batch):
+        return batch
 
 
 class NamedDataset(ShapeDataset):
@@ -126,9 +137,6 @@ class SingleChairDataset(ShapeDataset):
     def __init__(self, subsample=1.):
         super().__init__('data/chairs/single', subsample=subsample)
 
-    def filename_to_name(self, filename):
-        return 0
-
 
 class SphereCubeDataset(ShapeDataset):
     rgb = True
@@ -137,8 +145,29 @@ class SphereCubeDataset(ShapeDataset):
     def __init__(self, subsample=1.):
         super().__init__('data/spherecube', subsample=subsample)
 
-    def filename_to_name(self, filename):
-        return 0
+
+class ScPairsDataset(ShapeDataset):
+    rgb = True
+    single_id = True
+
+    def __init__(self):
+        super().__init__('data/sc-pairs')
+
+    def __len__(self):
+        return len(self.files) // 2
+
+    def __getitem__(self, idx):
+        filenames = self.files[2*idx:2*idx+2]
+        names, gs, imgs = zip(*[self.load_file(f, self.root) for f in filenames])
+        names = torch.tensor(names)
+        gs = torch.stack(gs, 0)
+        imgs = torch.stack(imgs, 0)
+        return names, gs, imgs
+
+
+    @staticmethod
+    def prep_batch(batch):
+        return [t.view(-1, *t.shape[2:]) for t in batch]  # Flatten pairs
 
 
 class CubeDataset(TensorDataset):
@@ -152,6 +181,10 @@ class CubeDataset(TensorDataset):
         data = np.load(os.path.join(data_dir, mode+'_data2.npy'))
         # labels = np.load(os.path.join(data_dir, mode+'_labels.npy'))
         super().__init__(torch.from_numpy(data.astype(np.float32))) #, torch.from_numpy(labels))
+
+    @staticmethod
+    def prep_batch(batch):
+        return batch
 
 
 class ToyDataset(TensorDataset):
@@ -186,3 +219,7 @@ class ToyDataset(TensorDataset):
 
     def save(self, path='data/toy.pickle'):
         torch.save(self.tensors, path)
+
+    @staticmethod
+    def prep_batch(batch):
+        return batch

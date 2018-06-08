@@ -2,8 +2,9 @@ from time import time
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from lie_vae.continuity_loss import ContinuityLoss
-from lie_vae.equivariance_loss import EquivarianceLoss
+from lie_vae.losses.continuity_loss import ContinuityLoss
+from lie_vae.losses.equivariance_loss import EquivarianceLoss
+from lie_vae.losses.encoder_continuity_loss import EncoderContinuityLoss
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -13,11 +14,13 @@ class UnsupervisedExperiment:
                  train_dataset, test_dataset, elbo_samples=1,
                  report_freq=1250, clip_grads=None, selective_clip=False,
                  batch_size=64, continuity_lamb=None, continuity_scale=None,
-                 equivariance_lamb=None):
+                 equivariance_lamb=None, encoder_continuity_lamb=None):
         self.log = log
         self.model = model
         self.optimizer = optimizer
         self.beta_schedule = beta_schedule
+        self.train_dataset = train_dataset
+        self.test_dataset = test_dataset
         self.train_loader = DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True,
             num_workers=train_dataset.num_workers)
@@ -36,6 +39,7 @@ class UnsupervisedExperiment:
                 log=log, report_freq=report_freq)
         else:
             self.continuity_loss = None
+
         if equivariance_lamb is not None:
             self.equivariance_loss = EquivarianceLoss(
                 model, lamb=equivariance_lamb,
@@ -43,10 +47,18 @@ class UnsupervisedExperiment:
         else:
             self.equivariance_loss = None
 
+        if encoder_continuity_lamb is not None:
+            self.encoder_continuity_loss = EncoderContinuityLoss(
+                model, lamb=encoder_continuity_lamb, log=log,
+                report_freq=report_freq)
+        else:
+            self.encoder_continuity_loss = None
+
     def test(self):
         self.model.eval()
         losses = []
-        for _, _, img_label in self.test_loader:
+        for batch in self.test_loader:
+            _, _, img_label = self.test_dataset.prep_batch(batch)
             img_label = img_label.to(device)
             recon, kl, kls = self.model.elbo(img_label, n=self.elbo_samples)
             losses.append((recon.mean().item(), kl.mean().item(),
@@ -57,7 +69,7 @@ class UnsupervisedExperiment:
         losses = []
         start = time()
         for it, batch in enumerate(self.train_loader):
-            _, _, img_label = batch
+            _, _, img_label = self.train_dataset.prep_batch(batch)
             self.model.train()
             img_label = img_label.to(device)
 
@@ -82,6 +94,10 @@ class UnsupervisedExperiment:
             if self.equivariance_loss:
                 loss = loss + self.equivariance_loss(
                     img_label, self.model.z[0][0], global_it)
+
+            if self.encoder_continuity_loss:
+                loss = loss + self.encoder_continuity_loss(
+                    self.model.z[0][0], global_it)
 
             self.optimizer.zero_grad()
             loss.backward()

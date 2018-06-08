@@ -10,7 +10,7 @@ import numpy as np
 
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
     HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset, \
-    ToyDataset
+    ToyDataset, ScPairsDataset
 from lie_vae.experiments import UnsupervisedExperiment, SemiSupervisedExperiment
 from lie_vae.vae import ChairsVAE
 from lie_vae.utils import random_split, LinearSchedule
@@ -29,6 +29,7 @@ def main():
     log = SummaryWriter(args.log_dir)
 
     item_rep = None  # Possibly given fixed harmonics
+    batch_size = 64
     if args.dataset == 'objects':
         dataset = ObjectsDataset()
     elif args.dataset == 'objects3':
@@ -43,6 +44,9 @@ def main():
         dataset = SingleChairDataset(subsample=args.subsample)
     elif args.dataset == 'spherecube':
         dataset = SphereCubeDataset(subsample=args.subsample)
+    elif args.dataset == 'sc-pairs':
+        dataset = ScPairsDataset()
+        batch_size = 32
     elif args.dataset == 'toy':
         dataset = ToyDataset()
         if args.fixed_spectrum:
@@ -100,11 +104,11 @@ def main():
     if args.experiment == 'unsupervised':
         exp_cls = UnsupervisedExperiment
         exp_kwargs = {}
-    elif args.experiment == 'semi':
-        exp_cls = SemiSupervisedExperiment
-        exp_kwargs = {
-            'num_labelled': args.semi_labelled,
-            'lambda_supervised': args.semi_lambda}
+    # elif args.experiment == 'semi':
+    #     exp_cls = SemiSupervisedExperiment
+    #     exp_kwargs = {
+    #         'num_labelled': args.semi_labelled,
+    #         'lambda_supervised': args.semi_lambda}
     else:
         raise RuntimeError('Wrong experiment')
 
@@ -112,6 +116,11 @@ def main():
         equivariance = LinearSchedule(0, args.equivariance, 1000, args.equivariance_end_it)
     else:
         equivariance = None
+    if args.encoder_continuity is not None:
+        encoder_continuity = LinearSchedule(0, args.encoder_continuity, 1000,
+                                            args.encoder_continuity_end_it)
+    else:
+        encoder_continuity = None
 
     experiment = exp_cls(
         log=log,
@@ -127,7 +136,9 @@ def main():
         equivariance_lamb=equivariance,
         continuity_lamb=args.continuity,
         continuity_scale=2*pi/args.continuity_iscale,
-        **exp_kwargs
+        batch_size=batch_size,
+        encoder_continuity_lamb=encoder_continuity,
+        # **exp_kwargs
     )
 
     early_stop_counter = 0
@@ -150,9 +161,9 @@ def main():
     if not args.beta == 0:
         print('Computing LL..')
         model = model.eval()
-        test_dataset = DataLoader(test_dataset, batch_size=4, shuffle=True, num_workers=5)
-        ll = np.mean([model.log_likelihood(batch[-1].to(device), n=500).data.cpu().numpy()
-                      for batch in test_dataset])
+        loader = DataLoader(test_dataset, batch_size=4, shuffle=True, num_workers=5)
+        ll = np.mean([model.log_likelihood(test_dataset.prep_batch(batch)[-1].to(device), n=500).data.cpu().numpy()
+                      for batch in loader])
         print('LL: {:.2f}'.format(ll))
         with open('ll.txt', 'a') as f:
             f.write("{} : {:4f}\n".format(args.name, ll))
@@ -207,6 +218,10 @@ def parse_args():
                         help='Strength of equivariance loss')
     parser.add_argument('--equivariance_end_it', type=int, default=20000,
                         help='It at which equivariance max')
+    parser.add_argument('--encoder_continuity', type=float,
+                        help='Strength of encoder_continuity loss')
+    parser.add_argument('--encoder_continuity_end_it', type=int, default=20000,
+                        help='It at which encoder_continuity max')
     parser.add_argument('--max_early_stop', type=int, default=50,
                         help='How many epochs to train without improvements'
                         'before doing early stopping.')
