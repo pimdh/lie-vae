@@ -21,11 +21,12 @@ class UnsupervisedExperiment:
                  report_freq=1250, clip_grads=None, selective_clip=False,
                  batch_size=64, continuity_lamb=None, continuity_scale=None,
                  equivariance_lamb=None, encoder_continuity_lamb=None,
-                 control=None):
+                 control=None, control_p=1):
         self.log = log
         self.model = model
         self.optimizer = optimizer
         self.control = control
+        self.control_p = control_p
         self.beta_schedule = beta_schedule
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
@@ -94,7 +95,12 @@ class UnsupervisedExperiment:
             if self.control is None:
                 loss = (recon + beta * kl).mean()
             else:
-                loss = (recon + self.control * torch.abs(beta - kl)).mean()
+                if self.control_p == 1:
+                    loss = (recon + self.control * torch.abs(beta - kl)).mean()
+                elif self.control_p == 2:
+                    loss = (recon + self.control * (beta - kl) ** 2).mean()
+                else:
+                    raise RuntimeError("Wrong control p")
 
             if torch.isnan(kl).sum():
                 raise RuntimeError("NaN KL")

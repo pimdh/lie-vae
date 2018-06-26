@@ -128,6 +128,7 @@ def main():
         batch_size=batch_size,
         encoder_continuity_lamb=encoder_continuity,
         control=args.control,
+        control_p=args.control_p,
     )
 
     early_stop_counter = 0
@@ -226,6 +227,8 @@ def parse_args():
                         help='Activation of MLP decoder')
     parser.add_argument('--fixed_sigma', type=float,
                         help='Optional fixed N0 sigma.')
+    parser.add_argument('--control_p', type=int, default=2,
+                        help='Use KL error absolute (1) or squared (2).')
 
     return parser.parse_args()
 
