@@ -45,7 +45,7 @@ def main():
     elif args.dataset == 'spherecube':
         dataset = SphereCubeDataset(subsample=args.subsample)
     elif args.dataset == 'sc-pairs':
-        dataset = ScPairsDataset()
+        dataset = ScPairsDataset(subsample=args.subsample)
         batch_size = 32
     elif args.dataset == 'toy':
         dataset = ToyDataset()
@@ -90,8 +90,8 @@ def main():
         model.load_state_dict(torch.load(os.path.join(
             args.save_dir, 'model.pickle')))
 
-    num_valid = 25000
-    num_test = 25000
+    num_valid = min(25000, int(0.2 * len(dataset)))
+    num_test = min(25000, int(0.2 * len(dataset)))
 
     split = [num_valid, num_test, len(dataset) - num_valid - num_test]
     valid_dataset, test_dataset, train_dataset = random_split(dataset, split)

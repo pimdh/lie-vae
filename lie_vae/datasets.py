@@ -150,14 +150,25 @@ class ScPairsDataset(ShapeDataset):
     rgb = True
     single_id = True
 
-    def __init__(self):
+    def __init__(self, subsample=1.):
         super().__init__('data/sc-pairs')
 
+        n = len(self.files) // 2
+        if subsample < 1:
+            seed = np.random.get_state()
+            np.random.seed(0)
+            self.indices = np.random.permutation(n)[:int(n*subsample)]
+            np.random.set_state(seed)
+        else:
+            self.indices = np.arange(n)
+
     def __len__(self):
-        return len(self.files) // 2
+        return len(self.indices)
 
     def __getitem__(self, idx):
+        idx = self.indices[idx]
         filenames = self.files[2*idx:2*idx+2]
+        assert len(filenames) == 2, "File not found"
         names, gs, imgs = zip(*[self.load_file(f, self.root) for f in filenames])
         names = torch.tensor(names)
         gs = torch.stack(gs, 0)
