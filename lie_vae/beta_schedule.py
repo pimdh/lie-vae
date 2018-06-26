@@ -48,6 +48,12 @@ def get_beta_schedule(schedule, beta):
         return LinearSchedule(3, 30, 30000, 60000)
     elif schedule == 'w':
         return LinearSchedule(1E-2, 1, 20000, 40000)
+    elif schedule == 'x':
+        return LinearSchedule(0, 15, 0, 750000)
+    elif schedule == 'y':
+        return LinearSchedule(0, 20, 0, 750000)
+    elif schedule == 'z':
+        return LinearSchedule(0, 30, 0, 750000)
     else:
         raise RuntimeError('Wrong beta schedule. Schedule={}, beta={}'
                            .format(schedule, beta))
