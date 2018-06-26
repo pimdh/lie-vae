@@ -127,7 +127,7 @@ def main():
         continuity_scale=2*pi/args.continuity_iscale,
         batch_size=batch_size,
         encoder_continuity_lamb=encoder_continuity,
-        # **exp_kwargs
+        control=args.control,
     )
 
     early_stop_counter = 0
@@ -174,6 +174,8 @@ def parse_args():
                         help='Whether to use Batch Norm in conv')
     parser.add_argument('--beta', type=float, default=1.)
     parser.add_argument('--beta_schedule', type=str)
+    parser.add_argument('--control', type=float,
+                        help='KL-Controlled VAE gamma. Beta is KL target.')
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--report_freq', type=int, default=1250)
     parser.add_argument('--degrees', type=int, default=6)

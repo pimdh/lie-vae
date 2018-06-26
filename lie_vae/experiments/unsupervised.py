@@ -10,14 +10,22 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 class UnsupervisedExperiment:
+    """Experiment
+
+    Params:
+    - control : turn beta-VAE in KL-controlled VAE with control
+                as gamma and beta as target.
+    """
     def __init__(self, *, log, model, optimizer, beta_schedule,
                  train_dataset, test_dataset, elbo_samples=1,
                  report_freq=1250, clip_grads=None, selective_clip=False,
                  batch_size=64, continuity_lamb=None, continuity_scale=None,
-                 equivariance_lamb=None, encoder_continuity_lamb=None):
+                 equivariance_lamb=None, encoder_continuity_lamb=None,
+                 control=None):
         self.log = log
         self.model = model
         self.optimizer = optimizer
+        self.control = control
         self.beta_schedule = beta_schedule
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
@@ -83,7 +91,10 @@ class UnsupervisedExperiment:
             else:
                 recon, kl, kls = self.model.elbo(img_label, n=self.elbo_samples)
 
-            loss = (recon + beta * kl).mean()
+            if self.control is None:
+                loss = (recon + beta * kl).mean()
+            else:
+                loss = (recon + self.control * torch.abs(beta - kl)).mean()
 
             if torch.isnan(kl).sum():
                 raise RuntimeError("NaN KL")
