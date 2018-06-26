@@ -11,7 +11,7 @@ import numpy as np
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
     HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset, \
     ToyDataset, ScPairsDataset
-from lie_vae.experiments import UnsupervisedExperiment, SemiSupervisedExperiment
+from lie_vae.experiments import UnsupervisedExperiment
 from lie_vae.vae import ChairsVAE
 from lie_vae.utils import random_split, LinearSchedule
 from lie_vae.beta_schedule import get_beta_schedule
@@ -101,17 +101,6 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters())
 
-    if args.experiment == 'unsupervised':
-        exp_cls = UnsupervisedExperiment
-        exp_kwargs = {}
-    # elif args.experiment == 'semi':
-    #     exp_cls = SemiSupervisedExperiment
-    #     exp_kwargs = {
-    #         'num_labelled': args.semi_labelled,
-    #         'lambda_supervised': args.semi_lambda}
-    else:
-        raise RuntimeError('Wrong experiment')
-
     if args.equivariance is not None:
         equivariance = LinearSchedule(0, args.equivariance, 1000, args.equivariance_end_it)
     else:
@@ -122,7 +111,7 @@ def main():
     else:
         encoder_continuity = None
 
-    experiment = exp_cls(
+    experiment = UnsupervisedExperiment(
         log=log,
         model=model,
         optimizer=optimizer,
@@ -179,8 +168,6 @@ def parse_args():
     parser.add_argument('--latent_mode', default='so3',
                         help='[so3, so3f, normal]')
     parser.add_argument('--mean_mode', default='alg', help='For SO(3). Choose [q, alg, s2s2, s2s1]')
-    parser.add_argument('--experiment', default='unsupervised',
-                        help='[unsupervised, semi]')
     parser.add_argument('--deconv_mode', default='deconv',
                         help='Deconv mode [deconv, upsample]')
     parser.add_argument('--batch_norm', type=int, default=1,
@@ -203,12 +190,6 @@ def parse_args():
     parser.add_argument('--save_dir')
     parser.add_argument('--name')
     parser.add_argument('--continue_epoch', type=int, default=0)
-    parser.add_argument('--semi_labelled', type=int, default=100,
-                        help='Number of labelled samples')
-    parser.add_argument('--semi_lambda', type=float, default=1.,
-                        help='Relative strength of supervised loss')
-    parser.add_argument('--semi_batch', type=int, default=1,
-                        help='Number of labelled samples in each batch')
     parser.add_argument('--continuity', type=float,
                         help='Strength of continuity loss')
     parser.add_argument('--continuity_iscale', type=float, default=200,
