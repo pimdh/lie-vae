@@ -181,7 +181,7 @@ def parse_args():
     parser.add_argument('--control', type=float,
                         help='KL-Controlled VAE gamma. Beta is KL target.')
     parser.add_argument('--epochs', type=int, default=100)
-    parser.add_argument('--report_freq', type=int, default=1250)
+    parser.add_argument('--report_freq', type=int, default=2500)
     parser.add_argument('--degrees', type=int, default=6)
     parser.add_argument('--deconv_hidden', type=int, default=200)
     parser.add_argument('--content_dims', type=int, default=10,
