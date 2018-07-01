@@ -170,7 +170,7 @@ def parse_args():
                         help='[action, mlp]')
     parser.add_argument('--latent_mode', default='so3',
                         help='[so3, so3f, normal]')
-    parser.add_argument('--mean_mode', default='alg', help='For SO(3). Choose [q, alg, s2s2, s2s1]')
+    parser.add_argument('--mean_mode', default='s2s2', help='For SO(3). Choose [q, alg, s2s2, s2s1]')
     parser.add_argument('--deconv_mode', default='deconv',
                         help='Deconv mode [deconv, upsample]')
     parser.add_argument('--batch_norm', type=int, default=1,
