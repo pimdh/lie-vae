@@ -138,10 +138,10 @@ class UnsupervisedExperiment:
                                     global_it)
                 self.log.add_scalar('train_recon', train_recon, global_it)
                 self.log.add_scalar('train_kl', train_kl, global_it)
-                self.log.add_scalars(
-                    'train_kls',
-                    {'kl%d' % i: x for i, x in enumerate(train_kls)},
-                    global_it)
+                # self.log.add_scalars(
+                #     'train_kls',
+                #     {'kl%d' % i: x for i, x in enumerate(train_kls)},
+                #     global_it)
 
                 test_recon, test_kl, *test_kls = self.test()
                 self.best_value = self.best_value if test_recon > self.best_value else test_recon
@@ -149,12 +149,15 @@ class UnsupervisedExperiment:
                                     global_it)
                 self.log.add_scalar('test_recon', test_recon, global_it)
                 self.log.add_scalar('test_kl', test_kl, global_it)
-                self.log.add_scalars(
-                    'test_kls',
-                    {'kl%d' % i: x for i, x in enumerate(test_kls)},
-                    global_it)
+                # self.log.add_scalars(
+                #     'test_kls',
+                #     {'kl%d' % i: x for i, x in enumerate(test_kls)},
+                #     global_it)
 
                 self.log.add_scalar('beta', beta, global_it)
+
+                for name, p in self.model.named_parameters():
+                    self.log.add_histogram(name, p.cpu().data.numpy(), global_it, 'auto')
 
                 dt = (time() - start) / self.report_freq
                 print(('Epoch {} it {} train recon {:.4f} kl {:.4f}'
