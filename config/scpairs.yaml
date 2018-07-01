@@ -1,0 +1,2 @@
+dataset: sc-pairs
+max_early_stop: 100

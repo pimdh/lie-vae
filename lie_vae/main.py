@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 import numpy as np
+import yaml
 
 from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
     HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset, \
@@ -233,7 +234,15 @@ def parse_args():
                         help='Use KL error absolute (1) or squared (2).')
     parser.add_argument('--weight_decay', type=float, default=0.)
     parser.add_argument('--lr', type=float, default=1.0E-3)
+    parser.add_argument('--config', nargs='*')
 
+    conf = {}
+    for name in parser.parse_args().config or []:
+        with open('config/'+name+'.yaml', 'r') as f:
+            file_conf = yaml.load(f)
+        conf = {**conf, **file_conf}
+
+    parser.set_defaults(**conf)
     return parser.parse_args()
 
 
