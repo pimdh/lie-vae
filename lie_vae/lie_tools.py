@@ -6,7 +6,6 @@ from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
 from lie_learn.representations.SO3.wigner_d import \
     wigner_D_matrix as reference_wigner_D_matrix
 from lie_learn.representations.SO3.irrep_bases import change_of_basis_matrix
-from s2cnn.utils.complex import as_complex
 
 from lie_vae.utils import complex_bmm, expand_dim
 from .utils import randomR
@@ -250,6 +249,7 @@ def wigner_d_matrix(angles, degree):
 
 
 def complex_wigner_d_matrix(angles, degree):
+    from s2cnn.utils.complex import as_complex
     n = angles.shape[0]
     d = as_complex(wigner_d_matrix(angles, degree))
     b = expand_dim(complex_b_matrix(degree, str(angles.device)), n)

@@ -1,8 +1,6 @@
 import torch
 from torch import nn as nn
 import torch.nn.functional as F
-from s2cnn.soft.gpu.s2_fft import S2_ifft_real
-from s2cnn.utils.complex import as_complex
 
 from .lie_tools import block_wigner_matrix_multiply, group_matrix_to_eazyz, \
     complex_block_wigner_matrix_multiply
@@ -130,6 +128,8 @@ class ProjectionDecoder(nn.Module):
     def __init__(self, degrees, deconv, rep_copies=10, projection_size=64,
                  item_rep=None, r=0.8):
         super().__init__()
+        from s2cnn.soft.gpu.s2_fft import S2_ifft_real
+        from s2cnn.utils.complex import as_complex
         self.deconv = deconv
         self.degrees = degrees
         self.rep_copies = rep_copies
