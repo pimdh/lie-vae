@@ -1,0 +1,2 @@
+latent_mode: normal
+decoder_mode: mlp

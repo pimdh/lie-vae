@@ -1,2 +1,3 @@
 dataset: sc-pairs
 max_early_stop: 100
+epochs: 50

@@ -15,10 +15,9 @@ class EncoderContinuityLoss(nn.Module):
         self.diffs = []
 
     def forward(self, encodings, it):
-        assert encodings.shape[-2:] == (3, 3), "Rotation matrix input required"
-
-        encodings = encodings.view(-1, 2, 3, 3)
-        diffs = (encodings[:, 0] - encodings[:, 1]).pow(2).view(-1, 9).sum(-1)
+        n = encodings.shape[0] // 2
+        encodings = encodings.view(n, 2, -1)
+        diffs = (encodings[:, 0] - encodings[:, 1]).pow(2).view(n, -1).sum(-1)
         self.diffs.append(diffs)
         mean = diffs.mean()
 
