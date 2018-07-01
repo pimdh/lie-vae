@@ -99,7 +99,8 @@ def main():
     print('Datset splits: train={}, valid={}, test={}'.format(
         len(train_dataset), len(valid_dataset), len(test_dataset)))
 
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     if args.equivariance is not None:
         equivariance = LinearSchedule(0, args.equivariance, 1000, args.equivariance_end_it)
@@ -229,6 +230,8 @@ def parse_args():
                         help='Optional fixed N0 sigma.')
     parser.add_argument('--control_p', type=int, default=2,
                         help='Use KL error absolute (1) or squared (2).')
+    parser.add_argument('--weight_decay', type=float, default=0.)
+    parser.add_argument('--lr', type=float, default=1.0E-3)
 
     return parser.parse_args()
 
