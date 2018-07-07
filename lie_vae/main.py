@@ -153,7 +153,7 @@ def main():
     if not args.beta == 0:
         print('Computing LL..')
         model = model.eval()
-        loader = DataLoader(test_dataset, batch_size=2, shuffle=True, num_workers=5)
+        loader = DataLoader(test_dataset, batch_size=1, shuffle=True, num_workers=1)
         with torch.no_grad():
             ll = np.mean([model.log_likelihood(test_dataset.prep_batch(batch)[-1].to(device), n=500).data.cpu().numpy()
                           for batch in loader])
