@@ -4,7 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from lie_vae.lie_tools import s2s1rodrigues
-from lie_vae.utils import expand_dim
+from lie_vae.experiments.utils import expand_dim
+
 
 class EquivarianceLoss(nn.Module):
     """Equivariance Loss for SO(2) subgroup."""

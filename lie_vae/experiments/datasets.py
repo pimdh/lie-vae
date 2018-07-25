@@ -84,60 +84,6 @@ class ShapeDataset(Dataset):
         return batch
 
 
-class NamedDataset(ShapeDataset):
-    data_path, names_path = None, None
-
-    def __init__(self):
-        super().__init__(self.data_path)
-        with open(self.names_path, 'r') as f:
-            self.name = re.findall('([A-z0-9]+)\.obj', f.read())
-        self.map = {n: i for i, n in enumerate(self.name)}
-
-    def __getitem__(self, idx):
-        name, group_el, image_tensor = super().__getitem__(idx)
-        return self.map[name], group_el, image_tensor
-
-
-class SelectedDataset(NamedDataset):
-    data_path = 'data/chairs/ten'
-    names_path = 'data/chairs/selected_chairs.txt'
-
-
-class ObjectsDataset(NamedDataset):
-    data_path = 'data/objects'
-    names_path = 'data/objects/objects.txt'
-
-
-class ThreeObjectsDataset(NamedDataset):
-    data_path = 'data/objects3'
-    names_path = 'data/objects3/objects.txt'
-
-
-class HumanoidDataset(ShapeDataset):
-    def __init__(self, subsample=1.):
-        super().__init__('data/humanoid', subsample=subsample)
-
-    def filename_to_name(self, filename):
-        return 0
-
-
-class ColorHumanoidDataset(ShapeDataset):
-    rgb = True
-
-    def __init__(self, subsample=1.):
-        super().__init__('data/chumanoid', subsample=subsample)
-
-    def filename_to_name(self, filename):
-        return 0
-
-
-class SingleChairDataset(ShapeDataset):
-    single_id = True
-
-    def __init__(self, subsample=1.):
-        super().__init__('data/chairs/single', subsample=subsample)
-
-
 class SphereCubeDataset(ShapeDataset):
     rgb = True
     single_id = True
@@ -179,23 +125,6 @@ class ScPairsDataset(ShapeDataset):
     @staticmethod
     def prep_batch(batch):
         return [t.view(-1, *t.shape[2:]) for t in batch]  # Flatten pairs
-
-
-class CubeDataset(TensorDataset):
-    num_workers = 0
-
-    def __init__(self, mode):
-        assert mode in ['train', 'test', 'dev'], "Mode should be train|test|dev"
-
-        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                '../data/cubes')
-        data = np.load(os.path.join(data_dir, mode+'_data2.npy'))
-        # labels = np.load(os.path.join(data_dir, mode+'_labels.npy'))
-        super().__init__(torch.from_numpy(data.astype(np.float32))) #, torch.from_numpy(labels))
-
-    @staticmethod
-    def prep_batch(batch):
-        return batch
 
 
 class ToyDataset(TensorDataset):

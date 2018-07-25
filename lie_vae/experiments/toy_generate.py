@@ -1,5 +1,6 @@
+"""Generate toy dataset."""
 import argparse
-from lie_vae.datasets import ToyDataset
+from lie_vae.experiments.datasets import ToyDataset
 
 parser = argparse.ArgumentParser('Toy data generator')
 parser.add_argument('num', type=int)

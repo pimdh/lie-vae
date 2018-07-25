@@ -1,15 +1,10 @@
+"""Tools for dealing with SO(3) group and algebra."""
+from functools import lru_cache
+import math
+
 import numpy as np
 import torch
 import torch.nn.functional as F
-import math
-from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
-from lie_learn.representations.SO3.wigner_d import \
-    wigner_D_matrix as reference_wigner_D_matrix
-from lie_learn.representations.SO3.irrep_bases import change_of_basis_matrix
-
-from lie_vae.utils import complex_bmm, expand_dim
-from .utils import randomR
-from functools import lru_cache
 
 
 @lru_cache(maxsize=256)
@@ -19,27 +14,7 @@ def j_matrix(l, device=None):
     return torch.tensor(Jd_np[l], dtype=torch.float32, device=torch.device(device))
 
 
-@lru_cache(maxsize=256)
-def complex_b_matrix(l, device=None):
-    mat = change_of_basis_matrix(
-            l,
-            frm=('real', 'quantum', 'centered', 'cs'),
-            to=('complex', 'quantum', 'centered', 'cs'))
-    mat = mat.astype(np.complex64).view(np.float32).reshape((2 * l + 1, 2 * l + 1, 2))
-    return torch.tensor(mat, dtype=torch.float32, device=torch.device(device))
-
-
-@lru_cache(maxsize=256)
-def complex_bb_matrix(l, device=None):
-    mat = change_of_basis_matrix(
-        l,
-        frm=('complex', 'quantum', 'centered', 'cs'),
-        to=('real', 'quantum', 'centered', 'cs'))
-    mat = mat.astype(np.complex64).view(np.float32).reshape((2 * l + 1, 2 * l + 1, 2))
-    return torch.tensor(mat, dtype=torch.float32, device=torch.device(device))
-
-
-def map2LieAlgebra(v):
+def map_to_lie_algebra(v):
     """Map a point in R^N to the tangent space at the identity, i.e.
     to the Lie Algebra
     Arg:
@@ -68,12 +43,12 @@ def map2LieAlgebra(v):
     return R
 
 
-def map2LieVector(X):
+def map_to_lie_vector(X):
     """Map Lie algebra in ordinary (3, 3) matrix rep to vector.
 
     In literature known as 'vee' map.
 
-    inverse of map2LieAlgebra
+    inverse of map_to_lie_algebra
     """
     return torch.stack((-X[..., 1, 2], X[..., 0, 2], -X[..., 0, 1]), -1)
 
@@ -81,7 +56,7 @@ def map2LieVector(X):
 def rodrigues(v):
     theta = v.norm(p=2, dim=-1, keepdim=True)
     # normalize K
-    K = map2LieAlgebra(v/theta)
+    K = map_to_lie_algebra(v / theta)
 
     I = torch.eye(3, device=v.device, dtype=v.dtype)
     R = I + torch.sin(theta)[..., None]*K \
@@ -90,7 +65,7 @@ def rodrigues(v):
 
 
 def s2s1rodrigues(s2_el, s1_el):
-    K = map2LieAlgebra(s2_el)
+    K = map_to_lie_algebra(s2_el)
     
     cos_theta = s1_el[...,0]
     sin_theta = s1_el[...,1]
@@ -248,15 +223,6 @@ def wigner_d_matrix(angles, degree):
     return res.view(*batch_dims, 2*degree+1, 2*degree+1)
 
 
-def complex_wigner_d_matrix(angles, degree):
-    from s2cnn.utils.complex import as_complex
-    n = angles.shape[0]
-    d = as_complex(wigner_d_matrix(angles, degree))
-    b = expand_dim(complex_b_matrix(degree, str(angles.device)), n)
-    bb = expand_dim(complex_bb_matrix(degree, str(angles.device)), n)
-    return complex_bmm(complex_bmm(b, d), bb)
-
-
 def block_wigner_matrix_multiply(angles, spectrum, max_degree, transpose=False):
     """Transform spectrum using wigner d matrices for all degrees.
 
@@ -287,37 +253,6 @@ def block_wigner_matrix_multiply(angles, spectrum, max_degree, transpose=False):
     return torch.cat(outputs, 1)
 
 
-def complex_block_wigner_matrix_multiply(angles, spectrum, max_degree):
-    """Transform complex spectrum using wigner d matrices for all degrees.
-
-    spectrum_dim is dictated by max_degree by the expression:
-    spectrum_dim = \sum_{i=0}^max_degree (2 * max_degree + 1) = (max_degree+1)^2
-
-    The representation is the direct sum of the irreps of the degrees up to max.
-    The computation is equivalent to a block-wise matrix multiply.
-
-    The spectrum are the Fourier modes of a C^{channels} signal.
-
-    The 2 in the in/output are the complex components.
-
-    Input:
-    - angles (batch, 3)  ZYZ Euler angles
-    - spectrum (batch, spectrum_dim, channels, 2)
-
-    Output: (batch, spectrum_dim, channels, 2)
-    """
-    outputs = []
-    start = 0
-    for degree in range(max_degree+1):
-        dim = 2 * degree + 1
-        matrix = complex_wigner_d_matrix(angles, degree)
-        degree_slice = spectrum[:, start:start + dim]
-        z = complex_bmm(matrix, degree_slice, conj_x=True)
-        outputs.append(z)
-        start += dim
-    return torch.cat(outputs, 1)
-
-
 def random_quaternions(n, dtype=torch.float32, device=None):
     u1, u2, u3 = torch.rand(3, n, dtype=dtype, device=device)
     return torch.stack((
@@ -335,9 +270,9 @@ def random_group_matrices(n, dtype=torch.float32, device=None):
 # Tests
 def test_algebra_maps():
     vs = torch.randn(100, 3).double()
-    matrices = map2LieAlgebra(vs)
-    vs_prime = map2LieVector(matrices)
-    matrices_prime = map2LieAlgebra(vs_prime)
+    matrices = map_to_lie_algebra(vs)
+    vs_prime = map_to_lie_vector(matrices)
+    matrices_prime = map_to_lie_algebra(vs_prime)
 
     np.testing.assert_allclose(vs_prime.detach().numpy(), vs.detach().numpy())
     np.testing.assert_allclose(matrices_prime.detach().numpy(), matrices.detach().numpy())
@@ -347,9 +282,9 @@ def test_log_exp(scale, error):
     for _ in range(50):
         v_start = torch.randn(3).double() * scale
         R = rodrigues(v_start)
-        v = map2LieVector(log_map(R))
+        v = map_to_lie_vector(log_map(R))
         R_prime = rodrigues(v)
-        v_prime = map2LieVector(log_map(R_prime))
+        v_prime = map_to_lie_vector(log_map(R_prime))
         np.testing.assert_allclose(R_prime.detach(), R.detach(),
                                    rtol=error, atol=error)
         np.testing.assert_allclose(v_prime.detach(), v.detach(),
@@ -357,8 +292,8 @@ def test_log_exp(scale, error):
 
 
 def test_coordinate_changes():
-    r = torch.stack(
-        [torch.tensor(randomR(), dtype=torch.float64) for _ in range(10000)], 0)
+    from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
+    r = random_group_matrices(10000, dtype=torch.float64)
 
     q_reference = SO3_coordinates(r.numpy().astype(np.float64), 'MAT', 'Q')
     q = group_matrix_to_quaternions(r)
@@ -386,10 +321,10 @@ def test_coordinate_changes():
 
 
 def test_wigner_d_matrices():
+    from lie_learn.representations.SO3.wigner_d import \
+        wigner_D_matrix as reference_wigner_D_matrix
     for l in range(6):
-        r = torch.stack(
-            [torch.tensor(randomR(), dtype=torch.float32)
-             for _ in range(10000)], 0)
+        r = random_group_matrices(10000, dtype=torch.float32)
         angles = group_matrix_to_eazyz(r)
 
         reference = np.stack([reference_wigner_D_matrix(l, *angle.numpy())
@@ -429,6 +364,9 @@ def test_orthogonal(r):
 
 
 def test_ref_wigner_d_matrices():
+    from lie_learn.representations.SO3.wigner_d import \
+        wigner_D_matrix as reference_wigner_D_matrix
+    from lie_learn.groups.SO3 import change_coordinates as SO3_coordinates
     for l in range(6):
         for i in range(1000):
             qa, qb = random_quaternions(2, dtype=torch.float64).numpy()
@@ -453,7 +391,6 @@ def test_ref_wigner_d_matrices():
             wc = reference_wigner_D_matrix(l, *ac)
 
             np.testing.assert_allclose(wb @ wa, wc, atol=1E-6, rtol=1E-6)
-
 
 
 def test_s2s1rodrigues(error):
@@ -494,23 +431,6 @@ def ref_s2_rotation(x, a, b, c):
     return x[..., 0]
 
 
-def test_complex_block_wigner_matrix_multiply():
-    from s2cnn.soft.gpu.s2_fft import S2_fft_real, S2_ifft_real
-    b = 20
-    n = 10
-    angles = quaternions_to_eazyz(random_quaternions(n, device='cuda'))
-    xs = torch.rand(n, 3, 2*b, 2*b, device='cuda')
-
-    refs = torch.stack([ref_s2_rotation(x[None], *a)[0] for x, a in zip(xs, angles)], 0)
-
-    spectra = S2_fft_real()(xs).transpose(0, 1)  # [d**2, b, c, 2]->[b, d**2, c, 2]
-    rotated_spectra = complex_block_wigner_matrix_multiply(angles, spectra, b-1)
-    rotated = S2_ifft_real()(rotated_spectra.transpose(0, 1).contiguous())
-
-    np.testing.assert_allclose(rotated, refs, atol=1E-5, rtol=1E-5)
-
-
-
 def main():
     np.random.seed(0)
     torch.manual_seed(0)
@@ -524,7 +444,6 @@ def main():
     test_coordinate_changes()
     test_wigner_d_matrices()
     test_ref_wigner_d_matrices()
-    test_complex_block_wigner_matrix_multiply()
 
     print("All tests passed")
 

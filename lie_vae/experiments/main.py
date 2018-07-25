@@ -1,7 +1,6 @@
 import os.path
 from pprint import pprint
 import argparse
-from math import pi
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -9,13 +8,11 @@ from tensorboardX import SummaryWriter
 import numpy as np
 import yaml
 
-from lie_vae.datasets import SelectedDataset, ObjectsDataset, ThreeObjectsDataset, \
-    HumanoidDataset, ColorHumanoidDataset, SingleChairDataset, SphereCubeDataset, \
-    ToyDataset, ScPairsDataset
+from lie_vae.experiments.datasets import SphereCubeDataset, ToyDataset, ScPairsDataset
 from lie_vae.experiments import UnsupervisedExperiment
-from lie_vae.vae import ChairsVAE
-from lie_vae.utils import random_split, LinearSchedule
-from lie_vae.beta_schedule import get_beta_schedule
+from lie_vae.experiments.vae import VAE
+from lie_vae.experiments.utils import random_split, LinearSchedule
+from lie_vae.experiments.beta_schedule import get_beta_schedule
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -31,19 +28,7 @@ def main():
 
     item_rep = None  # Possibly given fixed harmonics
     batch_size = 64
-    if args.dataset == 'objects':
-        dataset = ObjectsDataset()
-    elif args.dataset == 'objects3':
-        dataset = ThreeObjectsDataset()
-    elif args.dataset == 'chairs':
-        dataset = SelectedDataset()
-    elif args.dataset == 'humanoid':
-        dataset = HumanoidDataset(subsample=args.subsample)
-    elif args.dataset == 'chumanoid':
-        dataset = ColorHumanoidDataset(subsample=args.subsample)
-    elif args.dataset == 'single':
-        dataset = SingleChairDataset(subsample=args.subsample)
-    elif args.dataset == 'spherecube':
+    if args.dataset == 'spherecube':
         dataset = SphereCubeDataset(subsample=args.subsample)
     elif args.dataset == 'sc-pairs':
         dataset = ScPairsDataset(subsample=args.subsample)
@@ -54,7 +39,7 @@ def main():
             item_rep = dataset[0][1]
     else:
         raise RuntimeError('Wrong dataset')
-    if len(dataset) == 0:  #pylint: disable=C1801
+    if len(dataset) == 0:  # pylint: disable=C1801
         raise RuntimeError('Dataset empty')
 
     mlp_activation = {
@@ -63,8 +48,7 @@ def main():
         'tanh': nn.Tanh
     }[args.mlp_activation]
 
-    model = ChairsVAE(
-        content_dims=args.content_dims,
+    model = VAE(
         latent_mode=args.latent_mode,
         mean_mode=args.mean_mode,
         decoder_mode=args.decoder_mode,
@@ -75,7 +59,6 @@ def main():
         deconv_hidden=args.deconv_hidden,
         batch_norm=args.batch_norm,
         rgb=dataset.rgb,
-        single_id=dataset.single_id,
         normal_dims=args.normal_dims,
         deterministic=args.deterministic,
         item_rep=item_rep,
@@ -125,8 +108,6 @@ def main():
         clip_grads=args.clip_grads,
         selective_clip=args.selective_clip,
         equivariance_lamb=equivariance,
-        continuity_lamb=args.continuity,
-        continuity_scale=2*pi/args.continuity_iscale,
         batch_size=batch_size,
         encoder_continuity_lamb=encoder_continuity,
         control=args.control,
@@ -184,8 +165,6 @@ def parse_args():
     parser.add_argument('--report_freq', type=int, default=2500)
     parser.add_argument('--degrees', type=int, default=6)
     parser.add_argument('--deconv_hidden', type=int, default=200)
-    parser.add_argument('--content_dims', type=int, default=10,
-                        help='The dims of the content latent code')
     parser.add_argument('--rep_copies', type=int, default=10,
                         help='The dims of the virtual signal on the Sphere, '
                              'i.e. the number of copies of the representation.')
@@ -195,12 +174,6 @@ def parse_args():
     parser.add_argument('--log_dir')
     parser.add_argument('--save_dir')
     parser.add_argument('--name')
-    parser.add_argument('--continue_epoch', type=int, default=0)
-    parser.add_argument('--continuity', type=float,
-                        help='Strength of continuity loss')
-    parser.add_argument('--continuity_iscale', type=float, default=200,
-                        help='Inverse algebra distance with which continuity'
-                             'is measured. Distance is 2pi/iscale.')
     parser.add_argument('--equivariance', type=float,
                         help='Strength of equivariance loss')
     parser.add_argument('--equivariance_end_it', type=int, default=20000,

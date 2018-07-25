@@ -1,4 +1,4 @@
-from .utils import ConstantSchedule, LinearSchedule
+from lie_vae.experiments.utils import ConstantSchedule, LinearSchedule
 
 
 def get_beta_schedule(schedule, beta):

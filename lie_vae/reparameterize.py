@@ -4,22 +4,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 from torch.distributions import Normal
-from torch.distributions.kl import kl_divergence
 
-from .utils import logsumexp, n2p, t2p
-from .lie_tools import rodrigues, map2LieAlgebra, quaternions_to_group_matrix, \
+from .utils import logsumexp
+from .lie_tools import rodrigues, quaternions_to_group_matrix, \
     s2s1rodrigues, s2s2_gram_schmidt
-from .threevariate_normal import ThreevariateNormal
 
-import hyperspherical_vae_pytorch
 from hyperspherical_vae_pytorch.distributions import VonMisesFisher, HypersphericalUniform
 
-class Nreparameterize(nn.Module):
 
+class Nreparameterize(nn.Module):
+    """Reparametrize Gaussian variable."""
     def __init__(self, input_dim, z_dim):
-        super(Nreparameterize, self).__init__()
+        super().__init__()
 
         self.input_dim = input_dim
         self.z_dim = z_dim
@@ -27,8 +24,9 @@ class Nreparameterize(nn.Module):
         self.mu_linear = nn.Linear(input_dim, z_dim)
         self.return_means = False
 
+        self.mu, self.sigma, self.z = None, None, None
+
     def forward(self, x, n=1):
-        #print(x.max().data.cpu().numpy(),x.min().data.cpu().numpy())
         self.mu = self.mu_linear(x)
         self.sigma = F.softplus(self.sigma_linear(x))
         self.z = self.nsample(n=n)
@@ -36,13 +34,7 @@ class Nreparameterize(nn.Module):
 
     def kl(self):
         return -0.5 * torch.sum(1 + 2 * self.sigma.log() - self.mu.pow(2) - self.sigma ** 2, -1)
-    
-    #def kl(self):
-    #    log_q_z_x = self.log_posterior()
-    #    log_p_z = self.log_prior()
-    #   kl = log_q_z_x - log_p_z
-    #    return kl
-    
+
     def log_posterior(self):
         return self._log_posterior(self.z)
 
@@ -62,10 +54,12 @@ class Nreparameterize(nn.Module):
         """Set to return means."""
         self.return_means = True
 
+
 class Sreparameterize(nn.Module):
+    """Reparametrize VMF latent variable."""
 
     def __init__(self, input_dim, z_dim):
-        super(Sreparameterize, self).__init__()
+        super().__init__()
 
         self.input_dim = input_dim
         self.z_dim = z_dim
@@ -73,15 +67,19 @@ class Sreparameterize(nn.Module):
         self.mu_linear = nn.Linear(input_dim, z_dim)
         self.return_means = False
 
+        self.mu, self.k, self.z = None, None, None
+
     def forward(self, x, n=1):
         self.mu = self.mu_linear(x)
         self.mu = self.mu / self.mu.norm(p=2, dim=-1, keepdim=True)
-        self.k = F.softplus(self.k_linear(x)) + 1 #-nn.Threshold(-2000, -2000)( - (F.softplus(self.k_linear(x)) + 1) )
+        self.k = F.softplus(self.k_linear(x)) + 1
         self.z = self.nsample(n=n)
         return self.z
 
     def kl(self):
-        return - VonMisesFisher(self.mu, self.k).entropy() + HypersphericalUniform(self.z_dim - 1).entropy().to(self.mu.device) 
+        return (-VonMisesFisher(self.mu, self.k).entropy() +
+                HypersphericalUniform(self.z_dim - 1).entropy()
+                .to(self.mu.device))
     
     def log_posterior(self):
         return VonMisesFisher(self.mu, self.k).log_prob(self.z)
@@ -98,10 +96,11 @@ class Sreparameterize(nn.Module):
         """Set to return means."""
         self.return_means = True
 
-class N0reparameterize(nn.Module):
 
+class N0reparameterize(nn.Module):
+    """Reparametrize zero mean Gaussian Variable."""
     def __init__(self, input_dim, z_dim, fixed_sigma=None):
-        super(N0reparameterize, self).__init__()
+        super().__init__()
 
         self.input_dim = input_dim
         self.z_dim = z_dim
@@ -146,54 +145,8 @@ class N0reparameterize(nn.Module):
         self.return_means = True
 
 
-class N0Fullreparameterize(nn.Module):
-    """Zero mean Gaussian with full covariance matrix."""
-    def __init__(self, input_dim, z_dim):
-        super().__init__()
-        self.input_dim = input_dim
-        self.z_dim = z_dim
-        self.scale_linear = nn.Linear(input_dim, z_dim*z_dim)
-        self.return_means = False
-
-    def forward(self, x, n=1):
-        self.scale = F.softplus(self.scale_linear(x)) \
-            .view(-1, self.z_dim, self.z_dim)
-        # Make lower triangular
-        self.scale = self.scale * x.new_ones(self.z_dim, self.z_dim).tril()
-
-        zero_mean = x.new_zeros((x.shape[0], self.z_dim))
-        self.distr = ThreevariateNormal(zero_mean, scale_tril=self.scale)
-        self.z = self.nsample(n=n)
-        return self.z
-
-    def kl(self):
-        return kl_divergence(self.distr, self.prior_distr())
-
-    def log_posterior(self):
-        return self._log_posterior(self.z)
-
-    def _log_posterior(self, z):
-        return self.distr.log_prob(z)
-
-    def log_prior(self):
-        return self.prior_distr().log_prob(self.z)
-
-    def prior_distr(self):
-        prior_scale = torch.eye(self.z_dim, device=self.z.device)[None]
-        zero_mean = self.zeros_like(self.z)
-        return ThreevariateNormal(zero_mean, scale_tril=prior_scale)
-
-    def nsample(self, n=1):
-        if self.return_means:
-            return torch.zeros_like(self.scale[..., 0]).expand(n, -1, -1)
-        return self.distr.rsample((n,))
-
-    def deterministic(self):
-        """Set to return means."""
-        self.return_means = True
-
-
 class AlgebraMean(nn.Module):
+    """Module to map R^3 -> SO(3) with Algebra method."""
     def __init__(self, input_dims):
         super().__init__()
         self.map = nn.Linear(input_dims, 3)
@@ -212,6 +165,7 @@ class QuaternionMean(nn.Module):
 
 
 class S2S1Mean(nn.Module):
+    """Module to map R^5 -> SO(3) with S2S1 method."""
     def __init__(self, input_dims):
         super().__init__()
         self.s2_map = nn.Linear(input_dims, 3)
@@ -228,6 +182,7 @@ class S2S1Mean(nn.Module):
 
 
 class S2S2Mean(nn.Module):
+    """Module to map R^6 -> SO(3) with S2S2 method."""
     def __init__(self, input_dims):
         super().__init__()
         self.map = nn.Linear(input_dims, 6)
@@ -243,8 +198,15 @@ class S2S2Mean(nn.Module):
 
 
 class SO3reparameterize(nn.Module):
+    """Reparametrize SO(3) latent variable.
+
+    It uses an inner zero mean Gaussian reparametrization module, which it
+    exp-maps to a identity centered random SO(3) variable. The mean_module
+    deterministically outputs a mean.
+    """
+
     def __init__(self, reparameterize, mean_module, k=10):
-        super(SO3reparameterize, self).__init__()
+        super().__init__()
 
         self.mean_module = mean_module
         self.reparameterize = reparameterize
@@ -253,19 +215,7 @@ class SO3reparameterize(nn.Module):
         self.k = k
         self.return_means = False
 
-    @staticmethod
-    def _lieAlgebra(v):
-        """Map a point in R^N to the tangent space at the identity, i.e. 
-        to the Lie Algebra
-        Arg:
-            v = vector in R^N, (..., 3) in our case
-        Return:
-            R = v converted to Lie Algebra element, (3,3) in our case"""
-        return map2LieAlgebra(v)
-
-    @staticmethod
-    def _expmap_rodrigues(v):
-        return rodrigues(v)
+        self.mu_lie, self.v, self.z = None, None, None
 
     def forward(self, x, n=1):
         self.mu_lie = self.mean_module(x)
@@ -281,56 +231,45 @@ class SO3reparameterize(nn.Module):
         return kl.mean(0)
             
     def log_posterior(self):
+        theta = self.v.norm(p=2,dim=-1, keepdim=True)  # [n,B,1]
+        u = self.v / theta  # [n,B,3]
         
-        theta = self.v.norm(p=2,dim=-1, keepdim=True) #[n,B,1]
-        u = self.v / theta #[n,B,3]
-        
-        angles = torch.arange(-self.k, self.k+1, device=u.device, dtype=self.v.dtype) * 2 * math.pi #[2k+1]
+        angles = 2 * math.pi * torch.arange(
+            -self.k, self.k+1, device=u.device, dtype=self.v.dtype)  # [2k+1]
 
-        theta_hat = theta[..., None, :] + angles[:,None] #[n,B,2k+1,1]
+        theta_hat = theta[..., None, :] + angles[:, None]  # [n,B,2k+1,1]
 
         clamp = 1e-3
+        x = u[..., None, :] * theta_hat  # [n,B,2k+1,3]
+
+        # [n,(2k+1),B,3] or [n,(2k+1),B]
+        log_p = self.reparameterize._log_posterior(x.permute([0, 2, 1, 3]).contiguous())
         
-        #CLAMP FOR NUMERICAL STABILITY
-        
-        x = u[...,None,:] * theta_hat #[n,B,2k+1,3]
-        
-        log_p = self.reparameterize._log_posterior(x.permute([0,2,1,3]).contiguous()) #[n,(2k+1),B,3] or [n,(2k+1),B]
-        
-        # maybe reduce last dimension
         if len(log_p.size()) == 4:
-            log_p = log_p.sum(-1) # [n,(2k+1),B]
+            log_p = log_p.sum(-1)  # [n,(2k+1),B]
         
-        log_p = log_p.permute([0,2,1]) # [n,B,(2k+1)]
-        
-        
-        
+        log_p = log_p.permute([0, 2, 1])  # [n,B,(2k+1)]
+
         theta_hat_squared = torch.clamp(theta_hat ** 2, min=clamp)
         
         log_p.contiguous()
         cos_theta_hat = torch.cos(theta_hat)
-        
-        log_vol =  torch.log(theta_hat_squared / torch.clamp(2 - 2 * cos_theta_hat, min=clamp) ) #[n,B,(2k+1),1]
-        
-        #print (log_vol.max())
-        #print(log_vol.size())
-        
+
+        # [n,B,(2k+1),1]
+        log_vol = torch.log(theta_hat_squared / torch.clamp(2 - 2 * cos_theta_hat, min=clamp))
         log_p = log_p + log_vol.sum(-1)
-        
-        log_p = logsumexp(log_p,-1) #- np.log(8 * (np.pi ** 2)) #- (2 - (2) * torch.cos(theta)).log().sum(-1)
+        log_p = logsumexp(log_p, -1)
        
         return log_p
       
     def log_prior(self):
         prior = torch.tensor([- np.log(8 * (np.pi ** 2))], device=self.z.device)
-        return prior.expand_as(self.z[...,0,0])
-        
+        return prior.expand_as(self.z[..., 0, 0])
 
     def nsample(self, n=1):
         if self.return_means:
             return self.mu_lie.expand(n, *[-1]*len(self.mu_lie.shape))
-        # reproduce the decomposition of L-D we make
-        v_lie = SO3reparameterize._expmap_rodrigues(self.v)
+        v_lie = rodrigues(self.v)
         return self.mu_lie @ v_lie
 
     def deterministic(self):
