@@ -1,0 +1,4 @@
+dataset: sc-pairs
+max_early_stop: 100
+epochs: 100
+report_freq: 5000

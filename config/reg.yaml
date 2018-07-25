@@ -1,4 +1,0 @@
-equivariance: 100
-encoder_continuity: 3000
-equivariance_end_it: 100000
-encoder_continuity_end_it: 300000

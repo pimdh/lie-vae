@@ -1,15 +1,7 @@
-.ipynb_checkpoints/*
 data/*
-!data/cubes
-s2cnn/*
 __pycache__/*
 **/__pycache__/*
-.ipynb_checkpoints/*
 **/.ipynb_checkpoints/*
-mnist_example/*
 .idea
-shapes
-!shapes/.gitkeep
-gym/out
 runs
 outputs

@@ -2,7 +2,6 @@ from time import time
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from lie_vae.losses.continuity_loss import ContinuityLoss
 from lie_vae.losses.equivariance_loss import EquivarianceLoss
 from lie_vae.losses.encoder_continuity_loss import EncoderContinuityLoss
 
@@ -19,8 +18,8 @@ class UnsupervisedExperiment:
     def __init__(self, *, log, model, optimizer, beta_schedule,
                  train_dataset, test_dataset, elbo_samples=1,
                  report_freq=1250, clip_grads=None, selective_clip=False,
-                 batch_size=64, continuity_lamb=None, continuity_scale=None,
-                 equivariance_lamb=None, encoder_continuity_lamb=None,
+                 batch_size=64, equivariance_lamb=None,
+                 encoder_continuity_lamb=None,
                  control=None, control_p=1):
         self.log = log
         self.model = model
@@ -41,13 +40,6 @@ class UnsupervisedExperiment:
         self.selective_clip = selective_clip
         self.report_freq = report_freq
         self.best_value = np.inf
-
-        if continuity_lamb is not None:
-            self.continuity_loss = ContinuityLoss(
-                model, lamb=continuity_lamb, scale=continuity_scale,
-                log=log, report_freq=report_freq)
-        else:
-            self.continuity_loss = None
 
         if equivariance_lamb is not None:
             self.equivariance_loss = EquivarianceLoss(
@@ -104,9 +96,6 @@ class UnsupervisedExperiment:
 
             if torch.isnan(kl).sum():
                 raise RuntimeError("NaN KL")
-
-            if self.continuity_loss:
-                loss = loss + self.continuity_loss(global_it)
 
             if self.equivariance_loss:
                 loss = loss + self.equivariance_loss(
