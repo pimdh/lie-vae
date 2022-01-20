@@ -21,4 +21,4 @@ pip install tensorboardX tqdm git+https://github.com/AMLab-Amsterdam/lie_learn \
     git+https://github.com/pimdh/svae-temp.git 
 ```
 
-The sphere cube data can be generated with the `python -m lie_vae.experiments.gen_spherecube_pairs` (see file for details, this requires having installed Blender) or for limited time be downloaded [here](https://drive.google.com/file/d/1pZf4_B__XtL6DujHIhuARtYQk-JumZin/view?usp=sharing).
+The sphere cube data can be generated with the `python -m lie_vae.experiments.gen_spherecube_pairs` (see file for details, this requires having installed Blender 2.79b) or for limited time be downloaded [here](https://drive.google.com/file/d/1pZf4_B__XtL6DujHIhuARtYQk-JumZin/view?usp=sharing).
